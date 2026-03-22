@@ -26,11 +26,13 @@ Rustが必要です。
 cargo install --force --git https://github.com/cat2151/cat-gh-repo-creator
 ```
 
-## 実行
+## 初回実行
 
 ```
 cat-gh-repo-creator
 ```
+
+config.tomlを自動生成して終了となりますので、以下の設定をしてください
 
 ---
 
@@ -42,21 +44,16 @@ cat-gh-repo-creator
 %LOCALAPPDATA%\cat-gh-repo-creator\config.toml
 ```
 
-**`scan_directory` を自分の環境に合わせて編集してください（編集しないとエラー）**
+**`config.toml` の `scan_directory` を自分の環境に合わせて編集してください（編集しないとエラー）**
 
 ```toml
 scan_directory = "C:\\Users\\<YOUR NAME>\\repos"
-commit_message = "Initial commit (generated via Claude chat UI)"
-gitignore_template = "Rust"
-license = "mit"
-log_file = "cat-gh-repo-creator.log"
+```
 
-copy_files = [
-  ".github/workflows/call-check-large-files.yml",
-  ".github/workflows/call-issue-note.yml",
-  ".github/workflows/call-translate-readme.yml",
-  "_config.yml",
-]
+## 実行
+
+```
+cat-gh-repo-creator
 ```
 
 ---
