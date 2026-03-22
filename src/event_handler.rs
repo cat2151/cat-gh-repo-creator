@@ -59,14 +59,14 @@ pub fn handle_enter(state: &mut AppState, logger: &Logger) -> Result<()> {
             state.screen = AppScreen::ConfigRewrite;
         }
 
-        // ConfigPreview → CreateDialog（自動遷移）
+        // ConfigPreview → FetchFiles（自動遷移）
         AppScreen::ConfigPreview => {
-            state.screen = AppScreen::CreateDialog;
+            state.screen = AppScreen::FetchFiles;
         }
 
-        // FetchResult → Executing（自動遷移）
+        // FetchResult → CreateDialog（自動遷移）
         AppScreen::FetchResult => {
-            state.screen = AppScreen::Executing;
+            state.screen = AppScreen::CreateDialog;
         }
 
         AppScreen::Done | AppScreen::AbortDialog { .. } => {}
@@ -200,9 +200,7 @@ pub fn handle_yes(state: &mut AppState, logger: &Logger) -> Result<()> {
             state.screen = AppScreen::CopyResult;
         }
 
-        AppScreen::CreateDialog => {
-            state.screen = AppScreen::FetchFiles;
-        }
+        AppScreen::CreateDialog => state.screen = AppScreen::Executing,
         _ => {}
     }
     Ok(())
@@ -377,7 +375,7 @@ pub fn execute_git_ops(state: &mut AppState, logger: &Logger) -> Result<()> {
     );
     step!("git branch -M main", ops.git_branch_main());
 
-    match ops.gh_repo_create(&repo_name, state.config.gitignore_template.as_str()) {
+    match ops.gh_repo_create(&repo_name) {
         Ok(out) => {
             let url = extract_github_url(&out, &repo_name);
             logger.log("  ✓ gh repo create done")?;

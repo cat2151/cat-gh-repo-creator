@@ -92,7 +92,7 @@ fn run_app(
             continue;
         }
 
-        // ConfigPreview → CreateDialog（自動）
+        // ConfigPreview → FetchFiles（自動）
         if state.screen == AppScreen::ConfigPreview {
             event_handler::handle_enter(state, logger)?;
             continue;
@@ -106,7 +106,7 @@ fn run_app(
             continue;
         }
 
-        // FetchResult: 描画後に即 Executing へ遷移
+        // FetchResult: 描画後に即 CreateDialog へ遷移
         if state.screen == AppScreen::FetchResult {
             event_handler::handle_enter(state, logger)?;
             continue;

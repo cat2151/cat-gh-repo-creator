@@ -72,6 +72,10 @@ copy_files = [
     ↓ y
 [CopyResult]   コピー後のツリー表示
     ↓ ENTER
+[FetchFiles]   .gitignore / LICENSE を curl
+    ↓ 完了
+[FetchResult]  取得結果を表示
+    ↓ 自動
 [CreateDialog] git init〜gh repo create の設定確認  y / [N]
     ↓ y
 [Executing]    git init / add / commit / branch -M main / gh repo create を順次実行
@@ -127,7 +131,7 @@ git init
 git add .
 git commit -m "Initial commit (generated via Claude chat UI)"
 git branch -M main
-gh repo create <リポジトリ名> --public --source=. --remote=origin --push --disable-wiki --gitignore=<config>
+gh repo create <リポジトリ名> --public --source=. --remote=origin --push --disable-wiki
 ```
 
 完了後、ブラウザで `https://github.com/<リポジトリ名>` を自動で開きます

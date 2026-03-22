@@ -72,6 +72,10 @@ copy_files = [
     ↓ y
 [CopyResult]   Tree display after copying
     ↓ ENTER
+[FetchFiles]   curl .gitignore / LICENSE
+    ↓ complete
+[FetchResult]  Show fetched files
+    ↓ auto
 [CreateDialog] Confirmation of git init ~ gh repo create settings  y / [N]
     ↓ y
 [Executing]    Execute git init / add / commit / branch -M main / gh repo create sequentially
@@ -127,7 +131,7 @@ git init
 git add .
 git commit -m "Initial commit (generated via Claude chat UI)"
 git branch -M main
-gh repo create <repository_name> --public --source=. --remote=origin --push --disable-wiki --gitignore=<config>
+gh repo create <repository_name> --public --source=. --remote=origin --push --disable-wiki
 ```
 
 After completion, `https://github.com/<repository_name>` will automatically open in your browser.

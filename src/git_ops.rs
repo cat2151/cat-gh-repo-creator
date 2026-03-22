@@ -98,8 +98,8 @@ impl GitOps {
     }
 
     /// gh repo create --source=. --push --disable-wiki
-    pub fn gh_repo_create(&self, repo_name: &str, gitignore: &str) -> Result<String> {
-        let args = gh_repo_create_args(repo_name, gitignore);
+    pub fn gh_repo_create(&self, repo_name: &str) -> Result<String> {
+        let args = gh_repo_create_args(repo_name);
         self.run_owned("gh", &args)
     }
 
@@ -109,7 +109,7 @@ impl GitOps {
     }
 }
 
-fn gh_repo_create_args(repo_name: &str, gitignore: &str) -> Vec<String> {
+fn gh_repo_create_args(repo_name: &str) -> Vec<String> {
     vec![
         "repo".to_string(),
         "create".to_string(),
@@ -119,7 +119,6 @@ fn gh_repo_create_args(repo_name: &str, gitignore: &str) -> Vec<String> {
         "--remote=origin".to_string(),
         "--push".to_string(),
         "--disable-wiki".to_string(),
-        format!("--gitignore={gitignore}"),
     ]
 }
 
@@ -128,11 +127,12 @@ mod tests {
     use super::gh_repo_create_args;
 
     #[test]
-    fn gh_repo_create_args_excludes_license_flag() {
-        let args = gh_repo_create_args("demo-repo", "Rust");
+    fn gh_repo_create_args_omits_gitignore_and_license_flags() {
+        let args = gh_repo_create_args("demo-repo");
 
         assert!(args.iter().any(|arg| arg == "--push"));
-        assert!(args.iter().any(|arg| arg == "--gitignore=Rust"));
+        assert!(args.iter().any(|arg| arg == "--remote=origin"));
+        assert!(!args.iter().any(|arg| arg.starts_with("--gitignore")));
         assert!(!args.iter().any(|arg| arg.starts_with("--license")));
     }
 }

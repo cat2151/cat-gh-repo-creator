@@ -38,7 +38,7 @@ fn dim_block(title: &str) -> Block<'_> {
 /// col index
 /// 0: Repos  1: Inspect  2: CopyDialog  3: CopyResult
 /// 4: ConfigRewrite  5: ConfigPreview
-/// 6: CreateDialog  7: FetchFiles  8: FetchResult  9: Execute
+/// 6: FetchFiles  7: FetchResult  8: CreateDialog  9: Execute
 fn active_col(screen: &AppScreen) -> usize {
     match screen {
         AppScreen::DirList => 0,
@@ -47,9 +47,9 @@ fn active_col(screen: &AppScreen) -> usize {
         AppScreen::CopyResult => 3,
         AppScreen::ConfigRewrite => 4,
         AppScreen::ConfigPreview => 5,
-        AppScreen::CreateDialog => 6,
-        AppScreen::FetchFiles => 7,
-        AppScreen::FetchResult => 8,
+        AppScreen::FetchFiles => 6,
+        AppScreen::FetchResult => 7,
+        AppScreen::CreateDialog => 8,
         AppScreen::Executing => 9,
         AppScreen::Done => 9,
         AppScreen::AbortDialog { .. } => 99,
@@ -177,32 +177,32 @@ pub fn render(frame: &mut Frame, state: &AppState, log_lines: &[String]) {
         |f, a, act| render_col_config_preview(f, a, state, act),
         " Config ",
     );
-    // col 6: CreateDialog
+    // col 6: FetchFiles
     render_or_dim(
         frame,
         cols[6],
         active >= 6,
         active == 6,
-        |f, a, act| render_col_create_dialog(f, a, state, act),
-        " Create? ",
+        render_col_fetch_files,
+        " Fetch ",
     );
-    // col 7: FetchFiles
+    // col 7: FetchResult
     render_or_dim(
         frame,
         cols[7],
         active >= 7,
         active == 7,
-        render_col_fetch_files,
-        " Fetch ",
+        |f, a, act| render_col_fetch_result(f, a, state, act),
+        " Fetched ",
     );
-    // col 8: FetchResult
+    // col 8: CreateDialog
     render_or_dim(
         frame,
         cols[8],
         active >= 8,
         active == 8,
-        |f, a, act| render_col_fetch_result(f, a, state, act),
-        " Fetched ",
+        |f, a, act| render_col_create_dialog(f, a, state, act),
+        " Create? ",
     );
     // col 9: Execute
     render_or_dim(
@@ -519,8 +519,8 @@ fn render_col_create_dialog(frame: &mut Frame, area: Rect, state: &AppState, act
     let pu = if active { PURPLE } else { DIM };
     let or = if active { ORANGE } else { DIM };
     let gh_cmd = format!(
-        " gh repo create {}\n   --public --source=. --push\n   --disable-wiki\n   --gitignore={}",
-        dir_name, state.config.gitignore_template
+        " gh repo create {}\n   --public --source=. --remote=origin --push\n   --disable-wiki",
+        dir_name
     );
     let mut lines = vec![
         Line::from(vec![

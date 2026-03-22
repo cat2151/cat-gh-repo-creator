@@ -2,7 +2,7 @@
 mod tests {
     use crate::app_state::{AppScreen, AppState};
     use crate::config::AppConfig;
-    use crate::event_handler::{execute_config_rewrite, handle_yes};
+    use crate::event_handler::{execute_config_rewrite, handle_enter, handle_yes};
     use crate::logger::Logger;
     use crate::scanner::{CopyCandidate, DirEntry};
     use std::fs;
@@ -178,5 +178,56 @@ mod tests {
         assert_eq!(state.config_yml_old_name, "mini-command-palette-mery");
         assert_eq!(state.config_yml_new_name, "claude-chat-code");
         assert_eq!(state.config_yml_lines, vec!["title: Example".to_string()]);
+    }
+
+    #[test]
+    fn test_handle_enter_advances_config_preview_to_fetch_files() {
+        let temp = tempdir().unwrap();
+        let dest_dir = temp.path().join("claude-chat-code");
+        fs::create_dir_all(&dest_dir).unwrap();
+
+        let mut state = make_state(&dest_dir, "claude-chat-code");
+        state.screen = AppScreen::ConfigPreview;
+
+        let log_dir = tempdir().unwrap();
+        let logger = Logger::new(log_dir.path().join("test.log"));
+
+        handle_enter(&mut state, &logger).unwrap();
+
+        assert_eq!(state.screen, AppScreen::FetchFiles);
+    }
+
+    #[test]
+    fn test_handle_enter_advances_fetch_result_to_create_dialog() {
+        let temp = tempdir().unwrap();
+        let dest_dir = temp.path().join("claude-chat-code");
+        fs::create_dir_all(&dest_dir).unwrap();
+
+        let mut state = make_state(&dest_dir, "claude-chat-code");
+        state.screen = AppScreen::FetchResult;
+
+        let log_dir = tempdir().unwrap();
+        let logger = Logger::new(log_dir.path().join("test.log"));
+
+        handle_enter(&mut state, &logger).unwrap();
+
+        assert_eq!(state.screen, AppScreen::CreateDialog);
+    }
+
+    #[test]
+    fn test_handle_yes_advances_create_dialog_to_executing() {
+        let temp = tempdir().unwrap();
+        let dest_dir = temp.path().join("claude-chat-code");
+        fs::create_dir_all(&dest_dir).unwrap();
+
+        let mut state = make_state(&dest_dir, "claude-chat-code");
+        state.screen = AppScreen::CreateDialog;
+
+        let log_dir = tempdir().unwrap();
+        let logger = Logger::new(log_dir.path().join("test.log"));
+
+        handle_yes(&mut state, &logger).unwrap();
+
+        assert_eq!(state.screen, AppScreen::Executing);
     }
 }
