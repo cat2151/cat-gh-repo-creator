@@ -6,6 +6,12 @@ pub const EXECUTING_MESSAGE: &str = "処理中なのでお待ちください";
 const EXECUTING_SPINNER_FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum AbortDialogKind {
+    Generic,
+    ConfigRewrite,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum AppScreen {
     DirList,
     RepoInspect,
@@ -18,7 +24,10 @@ pub enum AppScreen {
     FetchResult,
     Executing,
     Done,
-    AbortDialog { message: String },
+    AbortDialog {
+        message: String,
+        kind: AbortDialogKind,
+    },
 }
 
 #[derive(Debug)]
@@ -72,6 +81,7 @@ impl AppState {
             AppScreen::AbortDialog {
                 message: "対象ディレクトリがありませんでした。config.toml設定をご確認ください。"
                     .to_string(),
+                kind: AbortDialogKind::Generic,
             }
         } else {
             AppScreen::DirList

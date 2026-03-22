@@ -1,4 +1,4 @@
-use crate::app_state::{AppScreen, AppState};
+use crate::app_state::{AbortDialogKind, AppScreen, AppState};
 use crate::copy_ops::{copy_file, rewrite_config_yml_repo_name, tree_display};
 use crate::git_ops::GitOps;
 use crate::logger::Logger;
@@ -66,6 +66,7 @@ pub fn handle_enter(state: &mut AppState, logger: &Logger) -> Result<()> {
             } else {
                 state.screen = AppScreen::AbortDialog {
                     message: "分析結果 NG。処理を中断します。".to_string(),
+                    kind: AbortDialogKind::Generic,
                 };
             }
         }
@@ -208,6 +209,7 @@ pub fn handle_yes(state: &mut AppState, logger: &Logger) -> Result<()> {
                 logger.log(&format!("Copy missing files: {}", missing.join(", ")))?;
                 state.screen = AppScreen::AbortDialog {
                     message: "コピーに失敗しました。バグを想定して調査してください。".to_string(),
+                    kind: AbortDialogKind::Generic,
                 };
                 return Ok(());
             }
@@ -228,6 +230,7 @@ pub fn handle_yes(state: &mut AppState, logger: &Logger) -> Result<()> {
 pub fn handle_no(state: &mut AppState, _logger: &Logger) -> Result<()> {
     state.screen = AppScreen::AbortDialog {
         message: "キャンセルされました。".to_string(),
+        kind: AbortDialogKind::Generic,
     };
     Ok(())
 }
@@ -258,6 +261,7 @@ pub fn execute_config_rewrite(state: &mut AppState, logger: &Logger) -> Result<(
         logger.log("_config.yml rewrite: file not found after copy")?;
         state.screen = AppScreen::AbortDialog {
             message: "yml書き換えに失敗しました。バグを想定して調査してください。".to_string(),
+            kind: AbortDialogKind::ConfigRewrite,
         };
         return Ok(());
     }
@@ -266,6 +270,7 @@ pub fn execute_config_rewrite(state: &mut AppState, logger: &Logger) -> Result<(
         logger.log("_config.yml rewrite: source repo name is unknown")?;
         state.screen = AppScreen::AbortDialog {
             message: "yml書き換えに失敗しました。バグを想定して調査してください。".to_string(),
+            kind: AbortDialogKind::ConfigRewrite,
         };
         return Ok(());
     }
@@ -276,6 +281,7 @@ pub fn execute_config_rewrite(state: &mut AppState, logger: &Logger) -> Result<(
             logger.log(&format!("_config.yml rewrite: read failed ({})", e))?;
             state.screen = AppScreen::AbortDialog {
                 message: "yml書き換えに失敗しました。バグを想定して調査してください。".to_string(),
+                kind: AbortDialogKind::ConfigRewrite,
             };
             return Err(e.into());
         }
@@ -291,6 +297,7 @@ pub fn execute_config_rewrite(state: &mut AppState, logger: &Logger) -> Result<(
         logger.log("_config.yml rewrite: no changes detected")?;
         state.screen = AppScreen::AbortDialog {
             message: "yml書き換えに失敗しました。バグを想定して調査してください。".to_string(),
+            kind: AbortDialogKind::ConfigRewrite,
         };
         return Ok(());
     }
@@ -299,6 +306,7 @@ pub fn execute_config_rewrite(state: &mut AppState, logger: &Logger) -> Result<(
         logger.log(&format!("_config.yml rewrite: write failed ({})", e))?;
         state.screen = AppScreen::AbortDialog {
             message: "yml書き換えに失敗しました。バグを想定して調査してください。".to_string(),
+            kind: AbortDialogKind::ConfigRewrite,
         };
         return Err(e.into());
     }
@@ -327,7 +335,10 @@ pub fn execute_fetch_files(state: &mut AppState, logger: &Logger) -> Result<()> 
                 Err(e) => {
                     let msg = format!("  ✗ {} Error: {}", $msg, e);
                     logger.log(&msg)?;
-                    state.screen = AppScreen::AbortDialog { message: msg };
+                    state.screen = AppScreen::AbortDialog {
+                        message: msg,
+                        kind: AbortDialogKind::Generic,
+                    };
                     return Err(e);
                 }
             }
@@ -388,7 +399,10 @@ pub fn poll_git_ops(state: &mut AppState, worker: &mut GitOpsWorker) {
             }
             Ok(GitOpsUpdate::Failed { message }) => {
                 state.add_exec_log(&message);
-                state.screen = AppScreen::AbortDialog { message };
+                state.screen = AppScreen::AbortDialog {
+                    message,
+                    kind: AbortDialogKind::Generic,
+                };
                 finished = true;
             }
             Err(TryRecvError::Empty) => break,
@@ -397,6 +411,7 @@ pub fn poll_git_ops(state: &mut AppState, worker: &mut GitOpsWorker) {
                 state.add_exec_log(&message);
                 state.screen = AppScreen::AbortDialog {
                     message: message.clone(),
+                    kind: AbortDialogKind::Generic,
                 };
                 finished = true;
                 break;

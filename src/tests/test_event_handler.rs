@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::app_state::{AppScreen, AppState};
+    use crate::app_state::{AbortDialogKind, AppScreen, AppState};
     use crate::config::AppConfig;
     use crate::event_handler::{execute_config_rewrite, handle_enter, handle_yes};
     use crate::logger::Logger;
@@ -101,8 +101,9 @@ mod tests {
 
         assert!(matches!(
             &state.screen,
-            AppScreen::AbortDialog { message }
+            AppScreen::AbortDialog { message, kind }
             if message == "コピーに失敗しました。バグを想定して調査してください。"
+                && matches!(kind, AbortDialogKind::Generic)
         ));
         assert!(state
             .copy_results
@@ -172,8 +173,9 @@ mod tests {
 
         assert!(matches!(
             &state.screen,
-            AppScreen::AbortDialog { message }
+            AppScreen::AbortDialog { message, kind }
             if message == "yml書き換えに失敗しました。バグを想定して調査してください。"
+                && matches!(kind, AbortDialogKind::ConfigRewrite)
         ));
         assert_eq!(state.config_yml_old_name, "mini-command-palette-mery");
         assert_eq!(state.config_yml_new_name, "claude-chat-code");

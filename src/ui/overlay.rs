@@ -2,7 +2,7 @@ use super::{
     blocks::base_block,
     theme::{BG, CYAN, GREEN, GREY, RED, YELLOW},
 };
-use crate::app_state::AppState;
+use crate::app_state::{AbortDialogKind, AppState};
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
@@ -14,7 +14,7 @@ use ratatui::{
 pub(super) fn render_log(frame: &mut Frame, area: Rect, log_lines: &[String]) {
     let items: Vec<ListItem> = log_lines
         .iter()
-        .map(|l| ListItem::new(Span::styled(l.clone(), Style::default().fg(GREY))))
+        .map(|l| ListItem::new(Span::styled(l.as_str(), Style::default().fg(GREY))))
         .collect();
     frame.render_widget(
         List::new(items)
@@ -46,7 +46,13 @@ pub(super) fn render_done(frame: &mut Frame, area: Rect, state: &AppState) {
     frame.render_widget(Paragraph::new(lines).block(base_block(" Done ")), area);
 }
 
-pub(super) fn render_abort(frame: &mut Frame, area: Rect, state: &AppState, message: &str) {
+pub(super) fn render_abort(
+    frame: &mut Frame,
+    area: Rect,
+    state: &AppState,
+    message: &str,
+    kind: &AbortDialogKind,
+) {
     let mut lines = vec![
         Line::from(""),
         Line::from(Span::styled(
@@ -54,7 +60,7 @@ pub(super) fn render_abort(frame: &mut Frame, area: Rect, state: &AppState, mess
             Style::default().fg(RED).add_modifier(Modifier::BOLD),
         )),
     ];
-    if message.contains("yml書き換え") {
+    if matches!(kind, AbortDialogKind::ConfigRewrite) {
         lines.push(Line::from(""));
         lines.push(Line::from(vec![
             Span::styled("  old repo name : ", Style::default().fg(GREY)),

@@ -26,8 +26,8 @@ pub fn render(frame: &mut Frame, state: &AppState, log_lines: &[String]) {
     let area = frame.area();
 
     match &state.screen {
-        AppScreen::AbortDialog { message } => {
-            render_abort(frame, area, state, message);
+        AppScreen::AbortDialog { message, kind } => {
+            render_abort(frame, area, state, message, kind);
             return;
         }
         AppScreen::Done => {
