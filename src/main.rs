@@ -69,7 +69,7 @@ fn run_app(
     state: &mut AppState,
     logger: &Logger,
 ) -> Result<()> {
-    let mut exec_worker = None;
+    let mut exec_worker: Option<event_handler::GitOpsWorker> = None;
     let mut next_exec_tick = Instant::now() + UI_POLL_INTERVAL;
 
     loop {
