@@ -23,7 +23,9 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use scanner::scan_directories;
 use std::io;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+const UI_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 fn main() -> Result<()> {
     // config読み込み（初回起動でconfig生成）
@@ -67,6 +69,9 @@ fn run_app(
     state: &mut AppState,
     logger: &Logger,
 ) -> Result<()> {
+    let mut exec_worker = None;
+    let mut next_exec_tick = Instant::now() + UI_POLL_INTERVAL;
+
     loop {
         let log_lines = logger.get_recent(20);
 
@@ -112,15 +117,39 @@ fn run_app(
             continue;
         }
 
-        // Executing状態のときgit実行（同期・1回のみ）
+        // Executing状態のときgit実行をバックグラウンドで進めつつUI更新
         if state.screen == AppScreen::Executing {
-            let log_lines_exec = logger.get_recent(20);
-            terminal.draw(|frame| ui::render(frame, state, &log_lines_exec))?;
-            let _ = event_handler::execute_git_ops(state, logger);
+            if exec_worker.is_none() {
+                exec_worker = Some(event_handler::start_git_ops(state, logger)?);
+                next_exec_tick = Instant::now() + UI_POLL_INTERVAL;
+            }
+            if let Some(worker) = exec_worker.as_mut() {
+                event_handler::poll_git_ops(state, worker);
+            }
+            if state.screen != AppScreen::Executing {
+                exec_worker = None;
+                continue;
+            }
+
+            let now = Instant::now();
+            let wait = next_exec_tick.saturating_duration_since(now);
+            if event::poll(wait)? {
+                if let Event::Key(key) = event::read()? {
+                    if key.kind == KeyEventKind::Press && matches!(key.code, KeyCode::Char('q')) {
+                        logger.log("Quit by user.")?;
+                        break;
+                    }
+                }
+                // スピナーはキー入力ではなく250ms経過でのみ進める。
+                continue;
+            }
+
+            state.advance_exec_spinner();
+            next_exec_tick = Instant::now() + UI_POLL_INTERVAL;
             continue;
         }
 
-        if !event::poll(Duration::from_millis(200))? {
+        if !event::poll(UI_POLL_INTERVAL)? {
             continue;
         }
 

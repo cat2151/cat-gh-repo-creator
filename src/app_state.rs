@@ -2,6 +2,9 @@ use crate::config::AppConfig;
 use crate::copy_ops::tree_display;
 use crate::scanner::{CopyCandidate, DirEntry};
 
+pub const EXECUTING_MESSAGE: &str = "処理中なのでお待ちください";
+const EXECUTING_SPINNER_FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppScreen {
     DirList,
@@ -49,6 +52,8 @@ pub struct AppState {
 
     // Executing
     pub exec_log: Vec<String>,
+    pub exec_status_message: String,
+    pub exec_spinner_index: usize,
 
     // Done
     pub repo_url: Option<String>,
@@ -90,6 +95,8 @@ impl AppState {
             fetch_results: Vec::new(),
             fetched_filenames: Vec::new(),
             exec_log: Vec::new(),
+            exec_status_message: EXECUTING_MESSAGE.to_string(),
+            exec_spinner_index: 0,
             repo_url: None,
         }
     }
@@ -123,5 +130,19 @@ impl AppState {
 
     pub fn add_exec_log(&mut self, msg: &str) {
         self.exec_log.push(msg.to_string());
+    }
+
+    pub fn prepare_execution(&mut self) {
+        self.exec_log.clear();
+        self.exec_status_message = EXECUTING_MESSAGE.to_string();
+        self.exec_spinner_index = 0;
+    }
+
+    pub fn advance_exec_spinner(&mut self) {
+        self.exec_spinner_index = (self.exec_spinner_index + 1) % EXECUTING_SPINNER_FRAMES.len();
+    }
+
+    pub fn exec_spinner_frame(&self) -> &'static str {
+        EXECUTING_SPINNER_FRAMES[self.exec_spinner_index]
     }
 }

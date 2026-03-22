@@ -98,4 +98,34 @@ mod tests {
         assert!(state.target_indices.is_empty());
         assert!(state.selected_target().is_none());
     }
+
+    #[test]
+    fn test_prepare_execution_resets_feedback() {
+        let mut state = make_state(vec![make_entry("target", false, true)]);
+        state.exec_log = vec!["old log".to_string()];
+        state.exec_status_message = "old status".to_string();
+        state.exec_spinner_index = 3;
+
+        state.prepare_execution();
+
+        assert!(state.exec_log.is_empty());
+        assert_eq!(state.exec_status_message, "処理中なのでお待ちください");
+        assert_eq!(state.exec_spinner_index, 0);
+        assert_eq!(state.exec_spinner_frame(), "|");
+    }
+
+    #[test]
+    fn test_advance_exec_spinner_rotates_frames() {
+        let mut state = make_state(vec![make_entry("target", false, true)]);
+
+        assert_eq!(state.exec_spinner_frame(), "|");
+        state.advance_exec_spinner();
+        assert_eq!(state.exec_spinner_frame(), "/");
+        state.advance_exec_spinner();
+        assert_eq!(state.exec_spinner_frame(), "-");
+        state.advance_exec_spinner();
+        assert_eq!(state.exec_spinner_frame(), "\\");
+        state.advance_exec_spinner();
+        assert_eq!(state.exec_spinner_frame(), "|");
+    }
 }

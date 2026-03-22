@@ -75,7 +75,7 @@ cat-gh-repo-creator
     ↓ 自動
 [CreateDialog] git init〜gh repo create の設定確認  y / [N]
     ↓ y
-[Executing]    git init / add / commit / branch -M main / gh repo create を順次実行
+[Executing]    git init / add / commit / branch -M main / gh repo create を順次実行しつつ、開始直後から250msごとのスピナーと「処理中なのでお待ちください」を表示
     ↓ 完了
 [Done]         ブラウザでリポジトリページを自動で開く → ENTERで終了
 ```

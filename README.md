@@ -75,7 +75,7 @@ cat-gh-repo-creator
     ↓ Automatic
 [CreateDialog] Configuration confirmation for git init ~ gh repo create  y / [N]
     ↓ y
-[Executing]    Sequentially execute git init / add / commit / branch -M main / gh repo create
+[Executing]    Sequentially execute git init / add / commit / branch -M main / gh repo create, while immediately showing a 250ms spinner and "処理中なのでお待ちください".
     ↓ Completed
 [Done]         Automatically open the repository page in a browser → Press ENTER to exit
 ```

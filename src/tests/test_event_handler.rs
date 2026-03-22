@@ -222,6 +222,9 @@ mod tests {
 
         let mut state = make_state(&dest_dir, "claude-chat-code");
         state.screen = AppScreen::CreateDialog;
+        state.exec_log = vec!["old log".to_string()];
+        state.exec_status_message = "old status".to_string();
+        state.exec_spinner_index = 2;
 
         let log_dir = tempdir().unwrap();
         let logger = Logger::new(log_dir.path().join("test.log"));
@@ -229,5 +232,8 @@ mod tests {
         handle_yes(&mut state, &logger).unwrap();
 
         assert_eq!(state.screen, AppScreen::Executing);
+        assert!(state.exec_log.is_empty());
+        assert_eq!(state.exec_status_message, "処理中なのでお待ちください");
+        assert_eq!(state.exec_spinner_index, 0);
     }
 }
