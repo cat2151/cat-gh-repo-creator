@@ -13,11 +13,13 @@ enum GitOpsUpdate {
     Failed { message: String },
 }
 
+/// git/gh 実行の進捗を受け取り、終了時に join するためのワーカーハンドル。
 pub struct GitOpsWorker {
     receiver: Receiver<GitOpsUpdate>,
     handle: Option<JoinHandle<()>>,
 }
 
+/// git/gh 実行をバックグラウンドで開始し、進捗監視用ハンドルを返す。
 pub fn start_git_ops(state: &AppState, logger: &Logger) -> Result<GitOpsWorker> {
     let dir = state
         .selected_dir
@@ -47,6 +49,7 @@ pub fn start_git_ops(state: &AppState, logger: &Logger) -> Result<GitOpsWorker> 
     })
 }
 
+/// ワーカーから到着した進捗・完了・失敗通知を処理して AppState を更新する。
 pub fn poll_git_ops(state: &mut AppState, worker: &mut GitOpsWorker) {
     let mut finished = false;
 
