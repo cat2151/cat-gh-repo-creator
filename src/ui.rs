@@ -630,20 +630,38 @@ fn render_col_fetch_result(frame: &mut Frame, area: Rect, state: &AppState, acti
 }
 
 fn render_col_executing(frame: &mut Frame, area: Rect, state: &AppState, active: bool) {
-    let items: Vec<ListItem> = state
-        .exec_log
-        .iter()
-        .map(|l| {
-            let style = if l.contains("Error") || l.contains("failed") {
-                Style::default().fg(RED)
-            } else if l.contains("✓") {
-                Style::default().fg(GREEN)
-            } else {
-                Style::default().fg(FG)
-            };
-            ListItem::new(Span::styled(format!(" {}", l), style))
-        })
-        .collect();
+    let mut items = vec![
+        ListItem::new(Line::from(vec![
+            Span::styled(
+                format!(" {} ", state.exec_spinner_frame()),
+                if active {
+                    Style::default().fg(YELLOW).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(DIM)
+                },
+            ),
+            Span::styled(
+                state.exec_status_message.as_str(),
+                if active {
+                    Style::default().fg(FG)
+                } else {
+                    Style::default().fg(DIM)
+                },
+            ),
+        ])),
+        ListItem::new(Line::from("")),
+    ];
+
+    items.extend(state.exec_log.iter().map(|l| {
+        let style = if l.contains("Error") || l.contains("failed") {
+            Style::default().fg(RED)
+        } else if l.contains("✓") {
+            Style::default().fg(GREEN)
+        } else {
+            Style::default().fg(FG)
+        };
+        ListItem::new(Span::styled(format!(" {}", l), style))
+    }));
     let block = if active {
         base_block(" Execute ")
     } else {

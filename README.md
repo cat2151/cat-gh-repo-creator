@@ -78,7 +78,7 @@ copy_files = [
     ↓ Automatic
 [CreateDialog] Confirm settings for git init ~ gh repo create  y / [N]
     ↓ y
-[Executing]    Sequentially execute git init / add / commit / branch -M main / gh repo create.
+[Executing]    Sequentially execute git init / add / commit / branch -M main / gh repo create, while immediately showing a 250ms spinner and "処理中なのでお待ちください".
     ↓ Completed
 [Done]         Automatically opens the repository page in the browser → Press ENTER to exit.
 ```
