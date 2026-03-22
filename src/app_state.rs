@@ -40,6 +40,7 @@ pub struct AppState {
 
     // ConfigRewrite / ConfigPreview
     pub config_yml_lines: Vec<String>, // 書き換え後の行一覧
+    pub config_yml_old_name: String,   // cp元repoのname
     pub config_yml_new_name: String,   // 現repoのname（着色用）
 
     // Fetch (.gitignore / LICENSE)
@@ -84,6 +85,7 @@ impl AppState {
             copy_candidates: Vec::new(),
             copy_results: Vec::new(),
             config_yml_lines: Vec::new(),
+            config_yml_old_name: String::new(),
             config_yml_new_name: String::new(),
             fetch_results: Vec::new(),
             fetched_filenames: Vec::new(),

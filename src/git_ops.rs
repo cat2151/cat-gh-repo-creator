@@ -25,6 +25,18 @@ impl GitOps {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
+    fn run_owned(&self, program: &str, args: &[String]) -> Result<String> {
+        let output = Command::new(program)
+            .args(args)
+            .current_dir(&self.repo_path)
+            .output()?;
+        if !output.status.success() {
+            let err = String::from_utf8_lossy(&output.stderr).to_string();
+            bail!("{} {:?} failed: {}", program, args, err);
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
     pub fn git_init(&self) -> Result<String> {
         self.run("git", &["init"])
     }
@@ -70,8 +82,12 @@ impl GitOps {
             return Ok(());
         }
         let output = Command::new("curl")
-            .args(["-L", "-o", dest.to_str().unwrap_or("LICENSE"),
-                   "https://raw.githubusercontent.com/git/git-scm.com/refs/heads/gh-pages/MIT-LICENSE.txt"])
+            .args([
+                "-L",
+                "-o",
+                dest.to_str().unwrap_or("LICENSE"),
+                "https://raw.githubusercontent.com/git/git-scm.com/refs/heads/gh-pages/MIT-LICENSE.txt",
+            ])
             .current_dir(&self.repo_path)
             .output()?;
         if !output.status.success() {
@@ -82,31 +98,41 @@ impl GitOps {
     }
 
     /// gh repo create --source=. --push --disable-wiki
-    pub fn gh_repo_create(
-        &self,
-        repo_name: &str,
-        gitignore: &str,
-        license: &str,
-    ) -> Result<String> {
-        self.run(
-            "gh",
-            &[
-                "repo",
-                "create",
-                repo_name,
-                "--public",
-                "--source=.",
-                "--remote=origin",
-                "--push",
-                "--disable-wiki",
-                &format!("--gitignore={}", gitignore),
-                &format!("--license={}", license),
-            ],
-        )
+    pub fn gh_repo_create(&self, repo_name: &str, gitignore: &str) -> Result<String> {
+        let args = gh_repo_create_args(repo_name, gitignore);
+        self.run_owned("gh", &args)
     }
 
     pub fn open_browser(url: &str) -> Result<()> {
         Command::new("cmd").args(["/C", "start", "", url]).spawn()?;
         Ok(())
+    }
+}
+
+fn gh_repo_create_args(repo_name: &str, gitignore: &str) -> Vec<String> {
+    vec![
+        "repo".to_string(),
+        "create".to_string(),
+        repo_name.to_string(),
+        "--public".to_string(),
+        "--source=.".to_string(),
+        "--remote=origin".to_string(),
+        "--push".to_string(),
+        "--disable-wiki".to_string(),
+        format!("--gitignore={gitignore}"),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gh_repo_create_args;
+
+    #[test]
+    fn gh_repo_create_args_excludes_license_flag() {
+        let args = gh_repo_create_args("demo-repo", "Rust");
+
+        assert!(args.iter().any(|arg| arg == "--push"));
+        assert!(args.iter().any(|arg| arg == "--gitignore=Rust"));
+        assert!(!args.iter().any(|arg| arg.starts_with("--license")));
     }
 }

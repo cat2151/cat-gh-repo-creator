@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::copy_ops::{copy_file, tree_display};
+    use crate::copy_ops::{copy_file, rewrite_config_yml_repo_name, tree_display};
     use std::fs;
     use tempfile::tempdir;
 
@@ -16,7 +16,6 @@ mod tests {
             &src,
             dst_dir.path(),
             ".github/workflows/call-check-large-files.yml",
-            "new-repo",
         )
         .unwrap();
 
@@ -30,7 +29,7 @@ mod tests {
     }
 
     #[test]
-    fn test_copy_config_yml_rewrites_names() {
+    fn test_copy_config_yml_keeps_original_content() {
         let src_dir = tempdir().unwrap();
         let dst_dir = tempdir().unwrap();
 
@@ -41,21 +40,32 @@ mod tests {
         )
         .unwrap();
 
-        copy_file(&src, dst_dir.path(), "_config.yml", "new-repo").unwrap();
+        copy_file(&src, dst_dir.path(), "_config.yml").unwrap();
 
         let dest = dst_dir.path().join("_config.yml");
         let content = fs::read_to_string(dest).unwrap();
         assert!(
-            content.contains("owner/new-repo"),
-            "Expected owner/new-repo in: {}",
+            content.contains("owner/old-repo"),
+            "Expected original repository name in: {}",
             content
         );
         assert!(
-            content.contains("baseurl: /new-repo"),
-            "Expected /new-repo in: {}",
+            content.contains("baseurl: /old-repo"),
+            "Expected original baseurl in: {}",
             content
         );
         assert!(content.contains("title: Test"));
+    }
+
+    #[test]
+    fn test_rewrite_config_yml_repo_name_replaces_every_occurrence() {
+        let content = "repository: owner/old-repo\nbaseurl: /old-repo\nurl: https://x/old-repo\n";
+        let (rewritten, changed) = rewrite_config_yml_repo_name(content, "old-repo", "new-repo");
+
+        assert!(changed);
+        assert!(rewritten.contains("owner/new-repo"));
+        assert!(rewritten.contains("baseurl: /new-repo"));
+        assert!(rewritten.contains("https://x/new-repo"));
     }
 
     #[test]

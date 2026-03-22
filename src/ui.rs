@@ -96,7 +96,7 @@ pub fn render(frame: &mut Frame, state: &AppState, log_lines: &[String]) {
 
     match &state.screen {
         AppScreen::AbortDialog { message } => {
-            render_abort(frame, area, message);
+            render_abort(frame, area, state, message);
             return;
         }
         AppScreen::Done => {
@@ -165,7 +165,7 @@ pub fn render(frame: &mut Frame, state: &AppState, log_lines: &[String]) {
         cols[4],
         active >= 4,
         active == 4,
-        render_col_config_rewrite,
+        |f, a, act| render_col_config_rewrite(f, a, state, act),
         " Rewrite ",
     );
     // col 5: ConfigPreview
@@ -391,26 +391,16 @@ fn render_col_copy_dialog(frame: &mut Frame, area: Rect, state: &AppState, activ
 }
 
 fn render_col_copy_result(frame: &mut Frame, area: Rect, state: &AppState, active: bool) {
-    let copied: Vec<String> = state
-        .copy_candidates
-        .iter()
-        .map(|c| {
-            c.filename
-                .replace('\\', "/")
-                .split('/')
-                .next_back()
-                .unwrap_or(&c.filename)
-                .to_string()
-        })
-        .collect();
     let items: Vec<ListItem> = state
         .copy_results
         .iter()
         .map(|line| {
-            let is_copied = copied.iter().any(|n| line.contains(n.as_str()));
+            let trimmed = line.trim_start();
             let style = if !active {
                 Style::default().fg(DIM)
-            } else if is_copied {
+            } else if line.starts_with("repo candidate:") {
+                Style::default().fg(ORANGE).add_modifier(Modifier::BOLD)
+            } else if trimmed.starts_with("├") || trimmed.starts_with("└") {
                 Style::default().fg(CYAN).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(FG)
@@ -426,20 +416,43 @@ fn render_col_copy_result(frame: &mut Frame, area: Rect, state: &AppState, activ
     frame.render_widget(List::new(items).block(block), area);
 }
 
-fn render_col_config_rewrite(frame: &mut Frame, area: Rect, active: bool) {
+fn render_col_config_rewrite(frame: &mut Frame, area: Rect, state: &AppState, active: bool) {
     let pu = if active { PURPLE } else { DIM };
+    let gy = if active { GREY } else { DIM };
+    let cy = if active { CYAN } else { DIM };
+    let old_name = if state.config_yml_old_name.is_empty() {
+        "(unknown)"
+    } else {
+        state.config_yml_old_name.as_str()
+    };
+    let new_name = if state.config_yml_new_name.is_empty() {
+        "(unknown)"
+    } else {
+        state.config_yml_new_name.as_str()
+    };
     let lines = vec![
         Line::from(Span::styled(
             " rewriting _config.yml...",
             Style::default().fg(if active { YELLOW } else { DIM }),
         )),
         Line::from(""),
+        Line::from(vec![
+            Span::styled(" old repo name : ", Style::default().fg(gy)),
+            Span::styled(
+                old_name,
+                Style::default().fg(cy).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled(" new repo name : ", Style::default().fg(gy)),
+            Span::styled(
+                new_name,
+                Style::default().fg(cy).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
         Line::from(Span::styled(
-            " repository: owner/old → owner/new",
-            Style::default().fg(pu),
-        )),
-        Line::from(Span::styled(
-            " baseurl: /old → /new",
+            " replace old repo name -> new repo name",
             Style::default().fg(pu),
         )),
     ];
@@ -455,22 +468,38 @@ fn render_col_config_rewrite(frame: &mut Frame, area: Rect, active: bool) {
 }
 
 fn render_col_config_preview(frame: &mut Frame, area: Rect, state: &AppState, active: bool) {
+    let old_name = &state.config_yml_old_name;
     let new_name = &state.config_yml_new_name;
-    let items: Vec<ListItem> = state
-        .config_yml_lines
-        .iter()
-        .map(|line| {
-            let contains_name = !new_name.is_empty() && line.contains(new_name.as_str());
-            let style = if !active {
-                Style::default().fg(DIM)
-            } else if contains_name {
-                Style::default().fg(CYAN).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(FG)
-            };
-            ListItem::new(Span::styled(format!(" {}", line), style))
-        })
-        .collect();
+    let gy = if active { GREY } else { DIM };
+    let cy = if active { CYAN } else { DIM };
+    let mut items: Vec<ListItem> = vec![
+        ListItem::new(Line::from(vec![
+            Span::styled(" old repo name : ", Style::default().fg(gy)),
+            Span::styled(
+                old_name,
+                Style::default().fg(cy).add_modifier(Modifier::BOLD),
+            ),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled(" new repo name : ", Style::default().fg(gy)),
+            Span::styled(
+                new_name,
+                Style::default().fg(cy).add_modifier(Modifier::BOLD),
+            ),
+        ])),
+        ListItem::new(Line::from("")),
+    ];
+    items.extend(state.config_yml_lines.iter().map(|line| {
+        let contains_name = !new_name.is_empty() && line.contains(new_name.as_str());
+        let style = if !active {
+            Style::default().fg(DIM)
+        } else if contains_name {
+            Style::default().fg(CYAN).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(FG)
+        };
+        ListItem::new(Span::styled(format!(" {}", line), style))
+    }));
     let block = if active {
         base_block(" _config.yml ")
     } else {
@@ -489,8 +518,10 @@ fn render_col_create_dialog(frame: &mut Frame, area: Rect, state: &AppState, act
     let cy = if active { CYAN } else { DIM };
     let pu = if active { PURPLE } else { DIM };
     let or = if active { ORANGE } else { DIM };
-    let gh_cmd = format!(" gh repo create {}\n   --public --source=. --push\n   --disable-wiki\n   --gitignore={} --license={}",
-        dir_name, state.config.gitignore_template, state.config.license);
+    let gh_cmd = format!(
+        " gh repo create {}\n   --public --source=. --push\n   --disable-wiki\n   --gitignore={}",
+        dir_name, state.config.gitignore_template
+    );
     let mut lines = vec![
         Line::from(vec![
             Span::styled(" name:    ", Style::default().fg(gy)),
@@ -656,19 +687,36 @@ fn render_done(frame: &mut Frame, area: Rect, state: &AppState) {
     frame.render_widget(Paragraph::new(lines).block(base_block(" Done ")), area);
 }
 
-fn render_abort(frame: &mut Frame, area: Rect, message: &str) {
-    let lines = vec![
+fn render_abort(frame: &mut Frame, area: Rect, state: &AppState, message: &str) {
+    let mut lines = vec![
         Line::from(""),
         Line::from(Span::styled(
             message,
             Style::default().fg(RED).add_modifier(Modifier::BOLD),
         )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  アプリを終了します [ENTER]",
-            Style::default().fg(YELLOW),
-        )),
     ];
+    if message.contains("yml書き換え") {
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            Span::styled("  old repo name : ", Style::default().fg(GREY)),
+            Span::styled(
+                state.config_yml_old_name.as_str(),
+                Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("  new repo name : ", Style::default().fg(GREY)),
+            Span::styled(
+                state.config_yml_new_name.as_str(),
+                Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+            ),
+        ]));
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  終了します [ENTER]",
+        Style::default().fg(YELLOW),
+    )));
     frame.render_widget(Paragraph::new(lines).block(base_block(" Abort ")), area);
 }
 
