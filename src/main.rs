@@ -23,7 +23,6 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use scanner::scan_directories;
 use std::io;
 use std::path::Path;
-use std::thread;
 use std::time::Duration;
 
 fn main() -> Result<()> {
@@ -128,7 +127,7 @@ fn run_app(
                 continue;
             }
             state.advance_exec_spinner();
-            thread::sleep(Duration::from_millis(250));
+            event::poll(Duration::from_millis(250))?;
             continue;
         }
 

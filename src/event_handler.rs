@@ -357,8 +357,13 @@ pub fn start_git_ops(state: &AppState, logger: &Logger) -> Result<GitOpsWorker> 
     let commit_message = state.config.commit_message.clone();
     let logger = logger.clone();
     let (sender, receiver) = mpsc::channel();
+    let worker_logger = logger.clone();
     let handle = thread::spawn(move || {
-        let _ = run_git_ops(dir, repo_name, commit_message, logger, sender);
+        if let Err(err) = run_git_ops(dir, repo_name, commit_message, logger, sender) {
+            let _ = worker_logger.log(&format!(
+                "Git operations failed in background thread: {err}"
+            ));
+        }
     });
 
     Ok(GitOpsWorker {
@@ -385,7 +390,9 @@ pub fn poll_git_ops(state: &mut AppState, worker: &mut GitOpsWorker) {
             }
             Err(TryRecvError::Empty) => break,
             Err(TryRecvError::Disconnected) => {
-                let message = "  ✗ git/gh execution stopped unexpectedly".to_string();
+                let message =
+                    "  ✗ Background worker disconnected before completion. This may indicate a crash or premature termination."
+                        .to_string();
                 state.add_exec_log(&message);
                 state.screen = AppScreen::AbortDialog {
                     message: message.clone(),
@@ -416,7 +423,7 @@ fn run_git_ops(
         ($msg:expr) => {{
             let line = $msg.to_string();
             logger.log(&line)?;
-            let _ = sender.send(GitOpsUpdate::Log(line));
+            send_git_ops_update(&sender, &logger, GitOpsUpdate::Log(line));
         }};
     }
 
@@ -433,9 +440,13 @@ fn run_git_ops(
                 Err(e) => {
                     let message = format!("  ✗ {} Error: {}", $msg, e);
                     logger.log(&message)?;
-                    let _ = sender.send(GitOpsUpdate::Failed {
-                        message: message.clone(),
-                    });
+                    send_git_ops_update(
+                        &sender,
+                        &logger,
+                        GitOpsUpdate::Failed {
+                            message: message.clone(),
+                        },
+                    );
                     return Err(e);
                 }
             }
@@ -453,17 +464,25 @@ fn run_git_ops(
             log_and_send!("  ✓ gh repo create done");
             logger.log(&format!("Repo URL: {}", url))?;
             let _ = GitOps::open_browser(&url);
-            let _ = sender.send(GitOpsUpdate::Done { repo_url: url });
+            send_git_ops_update(&sender, &logger, GitOpsUpdate::Done { repo_url: url });
         }
         Err(e) => {
             let message = format!("  ✗ gh repo create Error: {}", e);
             logger.log(&message)?;
-            let _ = sender.send(GitOpsUpdate::Failed { message });
+            send_git_ops_update(&sender, &logger, GitOpsUpdate::Failed { message });
             return Err(e);
         }
     }
 
     Ok(())
+}
+
+fn send_git_ops_update(sender: &mpsc::Sender<GitOpsUpdate>, logger: &Logger, update: GitOpsUpdate) {
+    if let Err(err) = sender.send(update) {
+        let _ = logger.log(&format!(
+            "Failed to send git/gh execution update to UI: {err}"
+        ));
+    }
 }
 
 fn extract_github_url(stdout: &str, repo_name: &str) -> String {
