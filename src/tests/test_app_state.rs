@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::app_state::{AppScreen, AppState};
+    use crate::app_state::{AbortDialogKind, AppScreen, AppState};
     use crate::config::AppConfig;
     use crate::scanner::DirEntry;
     use std::path::PathBuf;
@@ -93,6 +93,7 @@ mod tests {
             AppScreen::AbortDialog {
                 message: "対象ディレクトリがありませんでした。config.toml設定をご確認ください。"
                     .to_string(),
+                kind: AbortDialogKind::Generic,
             }
         );
         assert!(state.target_indices.is_empty());
