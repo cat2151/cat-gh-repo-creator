@@ -9,6 +9,9 @@ use std::path::Path;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread::{self, JoinHandle};
 
+pub const EXEC_WORKER_DISCONNECTED_MESSAGE: &str =
+    "  ✗ バックグラウンド処理が途中で切断されました。";
+
 enum GitOpsUpdate {
     Log(String),
     Done { repo_url: String },
@@ -390,9 +393,7 @@ pub fn poll_git_ops(state: &mut AppState, worker: &mut GitOpsWorker) {
             }
             Err(TryRecvError::Empty) => break,
             Err(TryRecvError::Disconnected) => {
-                let message =
-                    "  ✗ Background worker disconnected before completion. This may indicate a crash or premature termination."
-                        .to_string();
+                let message = EXEC_WORKER_DISCONNECTED_MESSAGE.to_string();
                 state.add_exec_log(&message);
                 state.screen = AppScreen::AbortDialog {
                     message: message.clone(),
