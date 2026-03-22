@@ -14,13 +14,13 @@ enum GitOpsUpdate {
 }
 
 /// git/gh 実行の進捗を受け取り、終了時に join するためのワーカーハンドル。
-pub struct GitOpsWorker {
+pub(crate) struct GitOpsWorker {
     receiver: Receiver<GitOpsUpdate>,
     handle: Option<JoinHandle<()>>,
 }
 
 /// git/gh 実行をバックグラウンドで開始し、進捗監視用ハンドルを返す。
-pub fn start_git_ops(state: &AppState, logger: &Logger) -> Result<GitOpsWorker> {
+pub(crate) fn start_git_ops(state: &AppState, logger: &Logger) -> Result<GitOpsWorker> {
     let dir = state
         .selected_dir
         .as_ref()
@@ -50,7 +50,7 @@ pub fn start_git_ops(state: &AppState, logger: &Logger) -> Result<GitOpsWorker> 
 }
 
 /// ワーカーから到着した進捗・完了・失敗通知を処理して AppState を更新する。
-pub fn poll_git_ops(state: &mut AppState, worker: &mut GitOpsWorker) {
+pub(crate) fn poll_git_ops(state: &mut AppState, worker: &mut GitOpsWorker) {
     let mut finished = false;
 
     loop {
@@ -85,7 +85,14 @@ pub fn poll_git_ops(state: &mut AppState, worker: &mut GitOpsWorker) {
 
     if finished {
         if let Some(handle) = worker.handle.take() {
-            let _ = handle.join();
+            if let Err(err) = handle.join() {
+                let message = format!("  ✗ バックグラウンド処理がpanicしました: {:?}", err);
+                state.add_exec_log(&message);
+                state.screen = AppScreen::AbortDialog {
+                    message,
+                    kind: AbortDialogKind::Generic,
+                };
+            }
         }
     }
 }
@@ -140,7 +147,43 @@ fn run_git_ops(
 
     match ops.gh_repo_create(&repo_name) {
         Ok(out) => {
-            let url = extract_github_url(&out, &repo_name);
+            let url = if let Some(url) = extract_github_url(&out) {
+                url
+            } else {
+                logger.log(
+                    "gh repo create output did not include a repository URL; querying gh repo view",
+                )?;
+                match ops.gh_repo_view_url() {
+                    Ok(url) if !url.is_empty() => url,
+                    Ok(_) => {
+                        let message = "  ✗ gh repo create succeeded but repository URL lookup returned an empty result.".to_string();
+                        logger.log(&message)?;
+                        send_git_ops_update(
+                            &sender,
+                            &logger,
+                            GitOpsUpdate::Failed {
+                                message: message.clone(),
+                            },
+                        );
+                        return Err(anyhow::anyhow!(message));
+                    }
+                    Err(e) => {
+                        let message = format!(
+                            "  ✗ gh repo create succeeded but repository URL could not be determined: {}",
+                            e
+                        );
+                        logger.log(&message)?;
+                        send_git_ops_update(
+                            &sender,
+                            &logger,
+                            GitOpsUpdate::Failed {
+                                message: message.clone(),
+                            },
+                        );
+                        return Err(e);
+                    }
+                }
+            };
             log_and_send!("  ✓ gh repo create done");
             logger.log(&format!("Repo URL: {}", url))?;
             let _ = GitOps::open_browser(&url);
@@ -165,14 +208,14 @@ fn send_git_ops_update(sender: &mpsc::Sender<GitOpsUpdate>, logger: &Logger, upd
     }
 }
 
-fn extract_github_url(stdout: &str, repo_name: &str) -> String {
+fn extract_github_url(stdout: &str) -> Option<String> {
     for line in stdout.lines() {
         let t = line.trim();
         if t.starts_with("https://github.com/") {
-            return t.to_string();
+            return Some(t.to_string());
         }
     }
-    format!("https://github.com/{}", repo_name)
+    None
 }
 
 #[cfg(test)]
@@ -183,15 +226,15 @@ mod tests {
     fn extract_github_url_returns_first_github_url_from_output() {
         let stdout = "creating repo\nhttps://github.com/cat2151/demo-repo\nnext line";
 
-        let url = extract_github_url(stdout, "demo-repo");
+        let url = extract_github_url(stdout);
 
-        assert_eq!(url, "https://github.com/cat2151/demo-repo");
+        assert_eq!(url.as_deref(), Some("https://github.com/cat2151/demo-repo"));
     }
 
     #[test]
-    fn extract_github_url_falls_back_to_repo_name_when_output_has_no_url() {
-        let url = extract_github_url("created successfully", "demo-repo");
+    fn extract_github_url_returns_none_when_output_has_no_url() {
+        let url = extract_github_url("created successfully");
 
-        assert_eq!(url, "https://github.com/demo-repo");
+        assert_eq!(url, None);
     }
 }

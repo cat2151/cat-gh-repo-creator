@@ -103,6 +103,11 @@ impl GitOps {
         self.run_owned("gh", &args)
     }
 
+    /// gh repo view --json url -q .url
+    pub fn gh_repo_view_url(&self) -> Result<String> {
+        self.run("gh", &gh_repo_view_url_args())
+    }
+
     pub fn open_browser(url: &str) -> Result<()> {
         Command::new("cmd").args(["/C", "start", "", url]).spawn()?;
         Ok(())
@@ -122,9 +127,13 @@ fn gh_repo_create_args(repo_name: &str) -> Vec<String> {
     ]
 }
 
+fn gh_repo_view_url_args() -> [&'static str; 6] {
+    ["repo", "view", "--json", "url", "-q", ".url"]
+}
+
 #[cfg(test)]
 mod tests {
-    use super::gh_repo_create_args;
+    use super::{gh_repo_create_args, gh_repo_view_url_args};
 
     #[test]
     fn gh_repo_create_args_omits_gitignore_and_license_flags() {
@@ -134,5 +143,13 @@ mod tests {
         assert!(args.iter().any(|arg| arg == "--remote=origin"));
         assert!(!args.iter().any(|arg| arg.starts_with("--gitignore")));
         assert!(!args.iter().any(|arg| arg.starts_with("--license")));
+    }
+
+    #[test]
+    fn gh_repo_view_url_args_request_canonical_url() {
+        assert_eq!(
+            gh_repo_view_url_args(),
+            ["repo", "view", "--json", "url", "-q", ".url"]
+        );
     }
 }

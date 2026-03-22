@@ -1,6 +1,6 @@
 mod git_worker;
 
-pub use git_worker::{poll_git_ops, start_git_ops};
+pub(crate) use git_worker::{poll_git_ops, start_git_ops, GitOpsWorker};
 
 use crate::app_state::{AbortDialogKind, AppScreen, AppState};
 use crate::copy_ops::{copy_file, rewrite_config_yml_repo_name, tree_display};
