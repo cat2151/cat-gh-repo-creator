@@ -56,6 +56,16 @@ scan_directory = "C:\\Users\\<YOUR NAME>\\repos"
 cat-gh-repo-creator
 ```
 
+## Self-update
+
+```
+cat-gh-repo-creator update
+```
+
+This runs the same `cargo install --force --git https://github.com/cat2151/cat-gh-repo-creator`
+update flow used for installation. On Windows, the app launches a temporary batch file and exits first
+so the running executable can be replaced safely.
+
 ---
 
 ## Workflow
