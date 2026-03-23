@@ -5,6 +5,7 @@ mod event_handler;
 mod git_ops;
 mod logger;
 mod scanner;
+mod self_update;
 mod ui;
 
 #[cfg(test)]
@@ -27,7 +28,20 @@ use std::time::{Duration, Instant};
 
 const UI_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
+pub(crate) fn wants_update(args: &[String]) -> bool {
+    args.get(1).map(String::as_str) == Some("update")
+}
+
 fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    if wants_update(&args) {
+        let should_exit = self_update::run_self_update()?;
+        if should_exit {
+            std::process::exit(0);
+        }
+        return Ok(());
+    }
+
     // config読み込み（初回起動でconfig生成）
     let cfg = load_config()?;
 
