@@ -21,12 +21,13 @@ pub fn run_self_update() -> anyhow::Result<bool> {
         use std::time::{SystemTime, UNIX_EPOCH};
 
         let pid = std::process::id();
-        let ts = SystemTime::now()
+        let timestamp_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_millis())
             .unwrap_or(0);
-        let bat_path =
-            std::env::temp_dir().join(format!("cat-gh-repo-creator_update_{pid}_{ts}.bat"));
+        let bat_path = std::env::temp_dir().join(format!(
+            "cat-gh-repo-creator_update_{pid}_{timestamp_ms}.bat"
+        ));
         {
             let mut file = std::fs::OpenOptions::new()
                 .write(true)
