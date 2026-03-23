@@ -35,10 +35,7 @@ pub(crate) fn is_update_subcommand(args: &[String]) -> bool {
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if is_update_subcommand(&args) {
-        let should_exit = self_update::run_self_update()?;
-        if should_exit {
-            std::process::exit(0);
-        }
+        self_update::run_self_update()?;
         return Ok(());
     }
 

@@ -9,7 +9,7 @@ pub(crate) fn install_cmd() -> String {
 #[cfg(any(target_os = "windows", test))]
 pub(crate) fn update_bat_content() -> String {
     format!(
-        "@echo off\r\ntimeout /t 3 /nobreak >nul\r\n{cmd}\r\ndel \"%~f0\"\r\n",
+        "@echo off\r\ntimeout /t 3 /nobreak >nul\r\n{cmd}\r\nset \"EXITCODE=%ERRORLEVEL%\"\r\ndel \"%~f0\"\r\nexit /b %EXITCODE%\r\n",
         cmd = install_cmd()
     )
 }
@@ -36,11 +36,11 @@ pub fn run_self_update() -> anyhow::Result<bool> {
             file.write_all(update_bat_content().as_bytes())?;
         }
 
-        let bat_str = bat_path
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("temp bat path is not valid UTF-8"))?;
         Command::new("cmd")
-            .args(["/C", "start", "", bat_str])
+            .arg("/C")
+            .arg("start")
+            .arg("")
+            .arg(&bat_path)
             .spawn()?;
 
         println!("Launching update script: {}", bat_path.display());
@@ -78,7 +78,7 @@ mod tests {
     fn test_update_bat_content_runs_install_then_self_deletes() {
         assert_eq!(
             update_bat_content(),
-            "@echo off\r\ntimeout /t 3 /nobreak >nul\r\ncargo install --force --git https://github.com/cat2151/cat-gh-repo-creator\r\ndel \"%~f0\"\r\n"
+            "@echo off\r\ntimeout /t 3 /nobreak >nul\r\ncargo install --force --git https://github.com/cat2151/cat-gh-repo-creator\r\nset \"EXITCODE=%ERRORLEVEL%\"\r\ndel \"%~f0\"\r\nexit /b %EXITCODE%\r\n"
         );
     }
 }
