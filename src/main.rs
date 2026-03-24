@@ -38,6 +38,7 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Subcommand, PartialEq, Eq)]
 pub(crate) enum Commands {
+    /// Run self-update to fetch the latest version.
     Update,
 }
 
