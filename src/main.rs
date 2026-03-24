@@ -39,7 +39,10 @@ pub(crate) struct Cli {
 #[derive(Debug, Subcommand, PartialEq, Eq)]
 pub(crate) enum Commands {
     /// Run self-update to fetch the latest version.
-    Update,
+    Update {
+        #[arg(hide = true, trailing_var_arg = true, allow_hyphen_values = true)]
+        ignored_args: Vec<String>,
+    },
 }
 
 pub(crate) fn parse_cli() -> Cli {
@@ -57,7 +60,7 @@ where
 
 fn main() -> Result<()> {
     let cli = parse_cli();
-    if matches!(cli.command, Some(Commands::Update)) {
+    if matches!(cli.command, Some(Commands::Update { .. })) {
         self_update::run_self_update()?;
         return Ok(());
     }

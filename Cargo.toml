@@ -2,6 +2,7 @@
 name = "cat-gh-repo-creator"
 version = "0.1.0"
 edition = "2021"
+description = "Interactively publish local Rust projects to GitHub via TUI"
 
 [[bin]]
 name = "cat-gh-repo-creator"

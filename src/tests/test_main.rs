@@ -9,7 +9,9 @@ mod tests {
         assert_eq!(
             cli,
             Cli {
-                command: Some(Commands::Update)
+                command: Some(Commands::Update {
+                    ignored_args: vec![]
+                })
             }
         );
     }
@@ -38,5 +40,20 @@ mod tests {
             parse_cli_from(["cat-gh-repo-creator", "--verbose"]).expect_err("parse should fail");
 
         assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn test_parse_cli_accepts_additional_args_for_update_subcommand() {
+        let cli = parse_cli_from(["cat-gh-repo-creator", "update", "--some-flag", "extra"])
+            .expect("parse should succeed");
+
+        assert_eq!(
+            cli,
+            Cli {
+                command: Some(Commands::Update {
+                    ignored_args: vec!["--some-flag".to_string(), "extra".to_string()]
+                })
+            }
+        );
     }
 }
