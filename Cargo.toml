@@ -2,6 +2,7 @@
 name = "cat-gh-repo-creator"
 version = "0.1.0"
 edition = "2021"
+description = "Interactively publish local Rust projects to GitHub via TUI"
 
 [[bin]]
 name = "cat-gh-repo-creator"
@@ -16,6 +17,7 @@ dirs = "5.0"
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 walkdir = "2.5"
+clap = { version = "4.6.0", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3.10"

@@ -56,6 +56,12 @@ scan_directory = "C:\\Users\\<YOUR NAME>\\repos"
 cat-gh-repo-creator
 ```
 
+## Help
+
+```sh
+cat-gh-repo-creator --help
+```
+
 ## Self-update
 
 ```

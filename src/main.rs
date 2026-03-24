@@ -13,6 +13,7 @@ mod tests;
 
 use anyhow::Result;
 use app_state::{AppScreen, AppState};
+use clap::{Parser, Subcommand};
 use config::load_config;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -28,13 +29,38 @@ use std::time::{Duration, Instant};
 
 const UI_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
-pub(crate) fn is_update_subcommand(args: &[String]) -> bool {
-    args.get(1).map(String::as_str) == Some("update")
+#[derive(Debug, Parser, PartialEq, Eq)]
+#[command(version, about, long_about = None)]
+pub(crate) struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Debug, Subcommand, PartialEq, Eq)]
+pub(crate) enum Commands {
+    /// Run self-update to fetch the latest version.
+    Update {
+        #[arg(hide = true, trailing_var_arg = true, allow_hyphen_values = true)]
+        ignored_args: Vec<String>,
+    },
+}
+
+pub(crate) fn parse_cli() -> Cli {
+    Cli::parse()
+}
+
+#[cfg(test)]
+pub(crate) fn parse_cli_from<I, T>(args: I) -> clap::error::Result<Cli>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<std::ffi::OsString> + Clone,
+{
+    Cli::try_parse_from(args)
 }
 
 fn main() -> Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-    if is_update_subcommand(&args) {
+    let cli = parse_cli();
+    if matches!(cli.command, Some(Commands::Update { .. })) {
         self_update::run_self_update()?;
         return Ok(());
     }
