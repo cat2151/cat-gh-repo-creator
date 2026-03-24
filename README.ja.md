@@ -56,6 +56,16 @@ scan_directory = "C:\\Users\\<YOUR NAME>\\repos"
 cat-gh-repo-creator
 ```
 
+## Self-update
+
+```
+cat-gh-repo-creator update
+```
+
+インストール時と同じ `cargo install --force --git https://github.com/cat2151/cat-gh-repo-creator`
+による更新フローを実行します。Windows では、一時的な batch file を起動してから
+アプリを終了し、実行中の exe を安全に置き換えられるようにしています。
+
 ---
 
 ## 作業フロー
