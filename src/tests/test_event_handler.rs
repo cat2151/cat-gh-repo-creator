@@ -243,7 +243,7 @@ mod tests {
 
         assert_eq!(state.screen, AppScreen::Executing);
         assert!(state.exec_log.is_empty());
-        assert_eq!(state.exec_status_message, "処理中なのでお待ちください");
+        assert_eq!(state.exec_status_message, "処理中です。お待ちください");
         assert_eq!(state.exec_spinner_index, 0);
     }
 

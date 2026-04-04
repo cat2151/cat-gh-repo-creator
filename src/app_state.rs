@@ -2,7 +2,7 @@ use crate::config::AppConfig;
 use crate::copy_ops::tree_display;
 use crate::scanner::{CopyCandidate, DirEntry};
 
-pub const EXECUTING_MESSAGE: &str = "処理中なのでお待ちください";
+pub const EXECUTING_MESSAGE: &str = "処理中です。お待ちください";
 const EXECUTING_SPINNER_FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
 const PROCESSING_SPINNER_FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
 
