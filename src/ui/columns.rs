@@ -1,6 +1,7 @@
 use super::{
     blocks::{base_block, dim_block},
     theme::{CYAN, DIM, FG, GREEN, GREY, ORANGE, PURPLE, RED, YELLOW},
+    time::format_mtime,
 };
 use crate::app_state::AppState;
 use ratatui::{
@@ -492,14 +493,4 @@ pub(super) fn render_col_executing(frame: &mut Frame, area: Rect, state: &AppSta
         dim_block(" Execute ")
     };
     frame.render_widget(List::new(items).block(block), area);
-}
-
-fn format_mtime(t: std::time::SystemTime) -> String {
-    let secs = t
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    chrono::DateTime::<chrono::Utc>::from_timestamp_secs(secs as i64)
-        .map(|d| d.format("%Y-%m-%d %H:%M").to_string())
-        .unwrap_or_else(|| "?".to_string())
 }

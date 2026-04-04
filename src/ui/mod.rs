@@ -3,6 +3,7 @@ mod columns;
 mod layout;
 mod overlay;
 mod theme;
+mod time;
 
 use crate::app_state::{AppScreen, AppState};
 use blocks::dim_block;
