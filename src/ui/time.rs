@@ -3,7 +3,8 @@ pub(super) fn format_mtime(t: std::time::SystemTime) -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    chrono::DateTime::<chrono::Utc>::from_timestamp_secs(secs as i64)
+    let secs = i64::try_from(secs).unwrap_or(i64::MAX);
+    chrono::DateTime::<chrono::Utc>::from_timestamp_secs(secs)
         .map(|d| d.format("%Y-%m-%d %H:%M").to_string())
         .unwrap_or_else(|| "?".to_string())
 }
