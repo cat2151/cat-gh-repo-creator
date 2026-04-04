@@ -2,7 +2,7 @@ mod git_worker;
 
 pub(crate) use git_worker::{poll_git_ops, start_git_ops, GitOpsWorker};
 
-use crate::app_state::{AbortDialogKind, AppScreen, AppState};
+use crate::app_state::{AbortDialogKind, AppScreen, AppState, PendingAction};
 use crate::copy_ops::{copy_file, rewrite_config_yml_repo_name, tree_display};
 use crate::git_ops::GitOps;
 use crate::logger::Logger;
@@ -18,39 +18,32 @@ pub fn handle_enter(state: &mut AppState, logger: &Logger) -> Result<()> {
                 return Ok(());
             };
             logger.log(&format!("Selected: {}", entry.name))?;
-            state.selected_dir = Some(entry.clone());
-
-            let contents = list_repo_contents(&entry.path).unwrap_or_default();
-            logger.log(&format!("Contents count: {}", contents.len()))?;
-            state.repo_contents = contents;
-
-            let mut reasons = Vec::new();
-            let ok_no_git = !entry.has_git;
-            let ok_cargo = entry.has_cargo_toml;
-            if ok_no_git {
-                reasons.push("✓ .git/ が存在しない".to_string());
-            } else {
-                reasons.push("✗ .git/ が存在する（既存repoの可能性）".to_string());
-            }
-            if ok_cargo {
-                reasons.push("✓ Cargo.toml が存在する".to_string());
-            } else {
-                reasons.push("✗ Cargo.toml が存在しない".to_string());
-            }
-
-            state.analysis_ok = ok_no_git && ok_cargo;
-            state.analysis_reasons = reasons;
-            logger.log(if state.analysis_ok {
-                "Analysis: OK"
-            } else {
-                "Analysis: NG"
-            })?;
             state.screen = AppScreen::RepoInspect;
+            state.selected_dir = Some(entry.clone());
+            state.repo_contents.clear();
+            state.analysis_complete = false;
+            state.analysis_ok = false;
+            state.analysis_reasons.clear();
+            state.copy_candidates.clear();
+            state.copy_results.clear();
+            state.config_yml_lines.clear();
+            state.config_yml_old_name.clear();
+            state.config_yml_new_name.clear();
+            state.fetch_results.clear();
+            state.fetched_filenames.clear();
+            state.repo_url = None;
+            state.begin_processing(
+                format!("{} を分析中...", entry.name),
+                PendingAction::InspectSelectedRepo,
+            );
         }
 
         AppScreen::RepoInspect => {
             if state.analysis_ok {
-                advance_to_copy_dialog(state, logger)?;
+                state.begin_processing(
+                    "コピー元ファイル候補を検索中...",
+                    PendingAction::LoadCopyCandidates,
+                );
             } else {
                 state.screen = AppScreen::AbortDialog {
                     message: "分析結果 NG。処理を中断します。".to_string(),
@@ -61,11 +54,16 @@ pub fn handle_enter(state: &mut AppState, logger: &Logger) -> Result<()> {
 
         // CopyResult → ConfigRewrite（自動実行）
         AppScreen::CopyResult => {
+            state.begin_processing("_config.yml を書き換え中...", PendingAction::RewriteConfig);
             state.screen = AppScreen::ConfigRewrite;
         }
 
         // ConfigPreview → FetchFiles（自動遷移）
         AppScreen::ConfigPreview => {
+            state.begin_processing(
+                ".gitignore / LICENSE を取得中...",
+                PendingAction::FetchFiles,
+            );
             state.screen = AppScreen::FetchFiles;
         }
 
@@ -80,14 +78,69 @@ pub fn handle_enter(state: &mut AppState, logger: &Logger) -> Result<()> {
     Ok(())
 }
 
-pub fn auto_advance_from_inspect(state: &mut AppState, logger: &Logger) -> Result<()> {
-    if state.screen == AppScreen::RepoInspect && state.analysis_ok {
-        advance_to_copy_dialog(state, logger)?;
+pub fn run_pending_action(
+    state: &mut AppState,
+    logger: &Logger,
+    action: PendingAction,
+) -> Result<()> {
+    let result = match action {
+        PendingAction::InspectSelectedRepo => execute_selected_repo_inspection(state, logger),
+        PendingAction::LoadCopyCandidates => load_copy_candidates(state, logger),
+        PendingAction::CopyFiles => execute_copy_files(state, logger),
+        PendingAction::RewriteConfig => execute_config_rewrite(state, logger),
+        PendingAction::FetchFiles => execute_fetch_files(state, logger),
+    };
+
+    if state.pending_action.is_none() {
+        state.clear_processing_overlay();
     }
+
+    result
+}
+
+fn execute_selected_repo_inspection(state: &mut AppState, logger: &Logger) -> Result<()> {
+    let Some(entry) = state.selected_dir.clone() else {
+        return Ok(());
+    };
+
+    let contents = list_repo_contents(&entry.path).unwrap_or_default();
+    logger.log(&format!("Contents count: {}", contents.len()))?;
+    state.repo_contents = contents;
+
+    let mut reasons = Vec::new();
+    let ok_no_git = !entry.has_git;
+    let ok_cargo = entry.has_cargo_toml;
+    if ok_no_git {
+        reasons.push("✓ .git/ が存在しない".to_string());
+    } else {
+        reasons.push("✗ .git/ が存在する（既存repoの可能性）".to_string());
+    }
+    if ok_cargo {
+        reasons.push("✓ Cargo.toml が存在する".to_string());
+    } else {
+        reasons.push("✗ Cargo.toml が存在しない".to_string());
+    }
+
+    state.analysis_complete = true;
+    state.analysis_ok = ok_no_git && ok_cargo;
+    state.analysis_reasons = reasons;
+    logger.log(if state.analysis_ok {
+        "Analysis: OK"
+    } else {
+        "Analysis: NG"
+    })?;
+
+    if state.analysis_ok {
+        state.begin_processing(
+            "コピー元ファイル候補を検索中...",
+            PendingAction::LoadCopyCandidates,
+        );
+    }
+
     Ok(())
 }
 
-fn advance_to_copy_dialog(state: &mut AppState, logger: &Logger) -> Result<()> {
+fn load_copy_candidates(state: &mut AppState, logger: &Logger) -> Result<()> {
     let base = Path::new(&state.config.scan_directory);
     let candidates = find_copy_candidates(base, &state.config.copy_files);
     logger.log(&format!("Copy candidates found: {}", candidates.len()))?;
@@ -161,49 +214,60 @@ fn build_copy_result_lines(
     (lines, missing)
 }
 
-pub fn handle_yes(state: &mut AppState, logger: &Logger) -> Result<()> {
+fn execute_copy_files(state: &mut AppState, logger: &Logger) -> Result<()> {
+    let dest_dir = state
+        .selected_dir
+        .as_ref()
+        .map(|d| d.path.clone())
+        .unwrap_or_default();
+    let dir_name = state
+        .selected_dir
+        .as_ref()
+        .map(|d| d.name.clone())
+        .unwrap_or_default();
+    let copy_candidates = state.copy_candidates.clone();
+    let expected_files = state.config.copy_files.clone();
+
+    state.config_yml_old_name = config_copy_source_repo_name(&copy_candidates).unwrap_or_default();
+    state.config_yml_new_name = dir_name.clone();
+
+    for candidate in &copy_candidates {
+        logger.log(&format!("Copying: {}", candidate.filename))?;
+        match copy_file(&candidate.source_path, &dest_dir, &candidate.filename) {
+            Ok(_) => logger.log(&format!("  ✓ {}", candidate.filename))?,
+            Err(e) => logger.log(&format!("  ✗ {} ({})", candidate.filename, e))?,
+        }
+    }
+
+    let (lines, missing) = build_copy_result_lines(&dest_dir, &copy_candidates, &expected_files);
+    state.copy_results = lines;
+
+    if !missing.is_empty() {
+        logger.log(&format!("Copy missing files: {}", missing.join(", ")))?;
+        state.screen = AppScreen::AbortDialog {
+            message: "コピーに失敗しました。バグを想定して調査してください。".to_string(),
+            kind: AbortDialogKind::Generic,
+        };
+        return Ok(());
+    }
+
+    logger.log("Copy complete.")?;
+    state.screen = AppScreen::CopyResult;
+    Ok(())
+}
+
+pub fn handle_yes(state: &mut AppState, _logger: &Logger) -> Result<()> {
     match &state.screen.clone() {
         AppScreen::CopyDialog => {
-            let dest_dir = state
-                .selected_dir
-                .as_ref()
-                .map(|d| d.path.clone())
-                .unwrap_or_default();
             let dir_name = state
                 .selected_dir
                 .as_ref()
                 .map(|d| d.name.clone())
                 .unwrap_or_default();
-            let copy_candidates = state.copy_candidates.clone();
-            let expected_files = state.config.copy_files.clone();
-
-            state.config_yml_old_name =
-                config_copy_source_repo_name(&copy_candidates).unwrap_or_default();
-            state.config_yml_new_name = dir_name.clone();
-
-            for candidate in &copy_candidates {
-                logger.log(&format!("Copying: {}", candidate.filename))?;
-                match copy_file(&candidate.source_path, &dest_dir, &candidate.filename) {
-                    Ok(_) => logger.log(&format!("  ✓ {}", candidate.filename))?,
-                    Err(e) => logger.log(&format!("  ✗ {} ({})", candidate.filename, e))?,
-                }
-            }
-
-            let (lines, missing) =
-                build_copy_result_lines(&dest_dir, &copy_candidates, &expected_files);
-            state.copy_results = lines;
-
-            if !missing.is_empty() {
-                logger.log(&format!("Copy missing files: {}", missing.join(", ")))?;
-                state.screen = AppScreen::AbortDialog {
-                    message: "コピーに失敗しました。バグを想定して調査してください。".to_string(),
-                    kind: AbortDialogKind::Generic,
-                };
-                return Ok(());
-            }
-
-            logger.log("Copy complete.")?;
-            state.screen = AppScreen::CopyResult;
+            state.begin_processing(
+                format!("{} にテンプレートファイルをコピー中...", dir_name),
+                PendingAction::CopyFiles,
+            );
         }
 
         AppScreen::CreateDialog => {

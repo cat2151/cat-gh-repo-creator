@@ -1,8 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use crate::app_state::{AbortDialogKind, AppScreen, AppState};
+    use crate::app_state::{AbortDialogKind, AppScreen, AppState, PendingAction};
     use crate::config::AppConfig;
-    use crate::event_handler::{execute_config_rewrite, handle_enter, handle_yes};
+    use crate::event_handler::{
+        execute_config_rewrite, handle_enter, handle_yes, run_pending_action,
+    };
     use crate::logger::Logger;
     use crate::scanner::{CopyCandidate, DirEntry};
     use std::fs;
@@ -98,6 +100,10 @@ mod tests {
         let logger = Logger::new(log_dir.path().join("test.log"));
 
         handle_yes(&mut state, &logger).unwrap();
+        assert_eq!(state.pending_action, Some(PendingAction::CopyFiles));
+
+        let action = state.take_pending_action().unwrap();
+        run_pending_action(&mut state, &logger, action).unwrap();
 
         assert!(matches!(
             &state.screen,
@@ -197,6 +203,8 @@ mod tests {
         handle_enter(&mut state, &logger).unwrap();
 
         assert_eq!(state.screen, AppScreen::FetchFiles);
+        assert_eq!(state.pending_action, Some(PendingAction::FetchFiles));
+        assert!(state.is_processing());
     }
 
     #[test]
@@ -237,5 +245,37 @@ mod tests {
         assert!(state.exec_log.is_empty());
         assert_eq!(state.exec_status_message, "処理中なのでお待ちください");
         assert_eq!(state.exec_spinner_index, 0);
+    }
+
+    #[test]
+    fn test_handle_enter_on_dir_list_schedules_inspection() {
+        let temp = tempdir().unwrap();
+        let target_dir = temp.path().join("demo-repo");
+        fs::create_dir_all(&target_dir).unwrap();
+        fs::write(
+            target_dir.join("Cargo.toml"),
+            "[package]\nname = \"demo-repo\"\n",
+        )
+        .unwrap();
+
+        let cfg = AppConfig {
+            scan_directory: temp.path().display().to_string(),
+            ..AppConfig::default()
+        };
+        let entry = make_entry(&target_dir, "demo-repo");
+        let mut state = AppState::new(cfg, vec![entry]);
+
+        let log_dir = tempdir().unwrap();
+        let logger = Logger::new(log_dir.path().join("test.log"));
+
+        handle_enter(&mut state, &logger).unwrap();
+
+        assert_eq!(state.screen, AppScreen::RepoInspect);
+        assert_eq!(
+            state.pending_action,
+            Some(PendingAction::InspectSelectedRepo)
+        );
+        assert!(state.is_processing());
+        assert!(!state.analysis_complete);
     }
 }

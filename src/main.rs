@@ -6,6 +6,7 @@ mod git_ops;
 mod logger;
 mod scanner;
 mod self_update;
+mod startup_worker;
 mod ui;
 
 #[cfg(test)]
@@ -22,9 +23,7 @@ use crossterm::{
 };
 use logger::Logger;
 use ratatui::{backend::CrosstermBackend, Terminal};
-use scanner::scan_directories;
 use std::io;
-use std::path::Path;
 use std::time::{Duration, Instant};
 
 const UI_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -74,12 +73,8 @@ fn main() -> Result<()> {
     logger.log("=== cat-gh-repo-creator started ===")?;
     logger.log(&format!("Config: scan_directory = {}", cfg.scan_directory))?;
 
-    // ディレクトリスキャン
-    let base = Path::new(&cfg.scan_directory);
-    let entries = scan_directories(base).unwrap_or_default();
-    logger.log(&format!("Directories found: {}", entries.len()))?;
-
-    let mut state = AppState::new(cfg, entries);
+    let mut state = AppState::new_loading(cfg);
+    state.show_processing_overlay("リポジトリ一覧を読み込み中...");
 
     // TUI セットアップ
     enable_raw_mode()?;
@@ -106,50 +101,34 @@ fn run_app(
     state: &mut AppState,
     logger: &Logger,
 ) -> Result<()> {
+    let mut startup_worker = Some(startup_worker::start_startup_scan(
+        &state.config.scan_directory,
+        logger,
+    ));
     let mut exec_worker: Option<event_handler::GitOpsWorker> = None;
     let mut next_exec_tick = Instant::now() + UI_POLL_INTERVAL;
 
     loop {
+        if let Some(worker) = startup_worker.as_mut() {
+            if startup_worker::poll_startup_scan(state, worker) {
+                startup_worker = None;
+            }
+        }
+
         let log_lines = logger.get_recent(20);
 
         terminal.draw(|frame| ui::render(frame, state, &log_lines))?;
 
-        // RepoInspect(OK)は描画後に即CopyDialogへ遷移
-        if state.screen == AppScreen::RepoInspect && state.analysis_ok {
-            event_handler::auto_advance_from_inspect(state, logger)?;
+        if let Some(action) = state.take_pending_action() {
+            event_handler::run_pending_action(state, logger, action)?;
             continue;
         }
 
-        // CopyResult → ConfigRewrite（自動）
-        if state.screen == AppScreen::CopyResult {
-            event_handler::handle_enter(state, logger)?;
-            continue;
-        }
-
-        // ConfigRewrite: 描画後に即書き換え実行 → ConfigPreview
-        if state.screen == AppScreen::ConfigRewrite {
-            let ll = logger.get_recent(20);
-            terminal.draw(|frame| ui::render(frame, state, &ll))?;
-            let _ = event_handler::execute_config_rewrite(state, logger);
-            continue;
-        }
-
-        // ConfigPreview → FetchFiles（自動）
-        if state.screen == AppScreen::ConfigPreview {
-            event_handler::handle_enter(state, logger)?;
-            continue;
-        }
-
-        // FetchFiles: 描画後に即 curl 実行 → FetchResult へ
-        if state.screen == AppScreen::FetchFiles {
-            let log_lines_fetch = logger.get_recent(20);
-            terminal.draw(|frame| ui::render(frame, state, &log_lines_fetch))?;
-            let _ = event_handler::execute_fetch_files(state, logger);
-            continue;
-        }
-
-        // FetchResult: 描画後に即 CreateDialog へ遷移
-        if state.screen == AppScreen::FetchResult {
+        // CopyResult / ConfigPreview / FetchResult は描画後に自動遷移
+        if matches!(
+            state.screen,
+            AppScreen::CopyResult | AppScreen::ConfigPreview | AppScreen::FetchResult
+        ) {
             event_handler::handle_enter(state, logger)?;
             continue;
         }
@@ -187,6 +166,9 @@ fn run_app(
         }
 
         if !event::poll(UI_POLL_INTERVAL)? {
+            if state.is_processing() {
+                state.advance_processing_spinner();
+            }
             continue;
         }
 
@@ -202,6 +184,10 @@ fn run_app(
         if matches!(key.code, KeyCode::Char('q')) {
             logger.log("Quit by user.")?;
             break;
+        }
+
+        if state.is_processing() {
+            continue;
         }
 
         match &state.screen {

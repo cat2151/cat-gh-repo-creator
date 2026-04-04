@@ -1,13 +1,13 @@
 use super::{
     blocks::base_block,
-    theme::{BG, CYAN, GREEN, GREY, RED, YELLOW},
+    theme::{BG, CYAN, FG, GREEN, GREY, RED, YELLOW},
 };
 use crate::app_state::{AbortDialogKind, AppState};
 use ratatui::{
-    layout::Rect,
+    layout::{Alignment, Constraint, Flex, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{List, ListItem, Paragraph},
+    widgets::{Clear, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -44,6 +44,35 @@ pub(super) fn render_done(frame: &mut Frame, area: Rect, state: &AppState) {
         )),
     ];
     frame.render_widget(Paragraph::new(lines).block(base_block(" Done ")), area);
+}
+
+pub(super) fn render_processing(frame: &mut Frame, area: Rect, state: &AppState, message: &str) {
+    let [popup] = Layout::vertical([Constraint::Length(5)])
+        .flex(Flex::Center)
+        .areas(area);
+    let [popup] = Layout::horizontal([Constraint::Percentage(60)])
+        .flex(Flex::Center)
+        .areas(popup);
+    let lines = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(
+                format!(" {} ", state.processing_spinner_frame()),
+                Style::default().fg(YELLOW).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(message, Style::default().fg(FG)),
+        ]),
+        Line::from(""),
+    ];
+
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        Paragraph::new(lines)
+            .block(base_block(" Processing "))
+            .alignment(Alignment::Center)
+            .style(Style::default().bg(BG)),
+        popup,
+    );
 }
 
 pub(super) fn render_abort(

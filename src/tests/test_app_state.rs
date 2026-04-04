@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::app_state::{AbortDialogKind, AppScreen, AppState};
+    use crate::app_state::{AbortDialogKind, AppScreen, AppState, PendingAction};
     use crate::config::AppConfig;
     use crate::scanner::DirEntry;
     use std::path::PathBuf;
@@ -101,6 +101,15 @@ mod tests {
     }
 
     #[test]
+    fn test_new_loading_waits_for_scan_result() {
+        let state = AppState::new_loading(AppConfig::default());
+
+        assert_eq!(state.screen, AppScreen::DirList);
+        assert!(state.dir_entries.is_empty());
+        assert!(state.target_indices.is_empty());
+    }
+
+    #[test]
     fn test_prepare_execution_resets_feedback() {
         let mut state = make_state(vec![make_entry("target", false, true)]);
         state.exec_log = vec!["old log".to_string()];
@@ -128,5 +137,17 @@ mod tests {
         assert_eq!(state.exec_spinner_frame(), "\\");
         state.advance_exec_spinner();
         assert_eq!(state.exec_spinner_frame(), "|");
+    }
+
+    #[test]
+    fn test_begin_processing_sets_overlay_and_action() {
+        let mut state = make_state(vec![make_entry("target", false, true)]);
+
+        state.begin_processing("processing...", PendingAction::FetchFiles);
+
+        assert!(state.is_processing());
+        assert_eq!(state.processing_message(), Some("processing..."));
+        assert_eq!(state.pending_action, Some(PendingAction::FetchFiles));
+        assert_eq!(state.processing_spinner_frame(), "|");
     }
 }

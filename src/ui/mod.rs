@@ -12,7 +12,7 @@ use columns::{
     render_col_fetch_files, render_col_fetch_result, render_col_repo_inspect,
 };
 use layout::{active_col, col_ratios, ratios_to_constraints};
-use overlay::{render_abort, render_done, render_log};
+use overlay::{render_abort, render_done, render_log, render_processing};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -134,6 +134,10 @@ pub fn render(frame: &mut Frame, state: &AppState, log_lines: &[String]) {
         |f, a, act| render_col_executing(f, a, state, act),
         " Execute ",
     );
+
+    if let Some(message) = state.processing_message() {
+        render_processing(frame, area, state, message);
+    }
 }
 
 fn render_or_dim<F>(

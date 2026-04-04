@@ -60,6 +60,7 @@ pub(crate) fn poll_git_ops(state: &mut AppState, worker: &mut GitOpsWorker) {
                 state.repo_url = Some(repo_url);
                 state.screen = AppScreen::Done;
                 finished = true;
+                break;
             }
             Ok(GitOpsUpdate::Failed { message }) => {
                 state.add_exec_log(&message);
@@ -68,6 +69,7 @@ pub(crate) fn poll_git_ops(state: &mut AppState, worker: &mut GitOpsWorker) {
                     kind: AbortDialogKind::Generic,
                 };
                 finished = true;
+                break;
             }
             Err(TryRecvError::Empty) => break,
             Err(TryRecvError::Disconnected) => {

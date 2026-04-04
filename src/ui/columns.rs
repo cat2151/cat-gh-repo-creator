@@ -66,12 +66,16 @@ pub(super) fn render_col_repo_inspect(
     let cy = if active { CYAN } else { DIM };
     let yw = if active { YELLOW } else { DIM };
     let or = if active { ORANGE } else { DIM };
-    let ok_sty = if state.analysis_ok {
+    let ok_sty = if !state.analysis_complete {
+        Style::default().fg(YELLOW).add_modifier(Modifier::BOLD)
+    } else if state.analysis_ok {
         Style::default().fg(GREEN).add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(RED).add_modifier(Modifier::BOLD)
     };
-    let status = if state.analysis_ok {
+    let status = if !state.analysis_complete {
+        "PROCESSING..."
+    } else if state.analysis_ok {
         "OK ✓"
     } else {
         "NG ✗"
@@ -97,20 +101,28 @@ pub(super) fn render_col_repo_inspect(
             ),
         ]),
     ];
-    for r in &state.analysis_reasons {
+    if !state.analysis_complete {
+        lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            format!("  {}", r),
+            "  リポジトリ内容を確認しています...",
             Style::default().fg(cy),
         )));
+    } else {
+        for r in &state.analysis_reasons {
+            lines.push(Line::from(Span::styled(
+                format!("  {}", r),
+                Style::default().fg(cy),
+            )));
+        }
+        lines.push(Line::from(""));
+        for l in state.build_tree_lines() {
+            lines.push(Line::from(Span::styled(
+                format!(" {}", l),
+                Style::default().fg(fg),
+            )));
+        }
     }
-    lines.push(Line::from(""));
-    for l in state.build_tree_lines() {
-        lines.push(Line::from(Span::styled(
-            format!(" {}", l),
-            Style::default().fg(fg),
-        )));
-    }
-    if active && !state.analysis_ok {
+    if active && state.analysis_complete && !state.analysis_ok {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             " 分析NG。[ENTER] 終了",
