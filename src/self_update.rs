@@ -1,84 +1,50 @@
-use std::process::Command;
+use cat_self_update_lib::self_update as launch_self_update;
+use std::sync::OnceLock;
 
-const GIT_URL: &str = "https://github.com/cat2151/cat-gh-repo-creator";
+pub(crate) const REPO_OWNER: &str = "cat2151";
+pub(crate) const REPO_NAME: &str = "cat-gh-repo-creator";
+const BIN_NAMES: &[&str] = &["cat-gh-repo-creator"];
 
 pub(crate) fn install_cmd() -> String {
-    format!("cargo install --force --git {GIT_URL}")
+    format!("cargo install --force --git {}", git_url())
 }
 
-#[cfg(any(target_os = "windows", test))]
-pub(crate) fn update_bat_content() -> String {
-    format!(
-        "@echo off\r\ntimeout /t 3 /nobreak >nul\r\n{cmd}\r\nset \"EXITCODE=%ERRORLEVEL%\"\r\ndel \"%~f0\"\r\nexit /b %EXITCODE%\r\n",
-        cmd = install_cmd()
-    )
+pub(crate) fn owner_repo() -> &'static str {
+    static OWNER_REPO: OnceLock<String> = OnceLock::new();
+    OWNER_REPO
+        .get_or_init(|| format!("{REPO_OWNER}/{REPO_NAME}"))
+        .as_str()
+}
+
+fn git_url() -> &'static str {
+    static GIT_URL: OnceLock<String> = OnceLock::new();
+    GIT_URL
+        .get_or_init(|| format!("https://github.com/{}", owner_repo()))
+        .as_str()
 }
 
 pub fn run_self_update() -> anyhow::Result<bool> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::io::Write;
-        use std::time::{SystemTime, UNIX_EPOCH};
-
-        let pid = std::process::id();
-        let timestamp_ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|duration| duration.as_millis())
-            .unwrap_or(0);
-        let bat_path = std::env::temp_dir().join(format!(
-            "cat-gh-repo-creator_update_{pid}_{timestamp_ms}.bat"
-        ));
-        {
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&bat_path)?;
-            file.write_all(update_bat_content().as_bytes())?;
-        }
-
-        Command::new("cmd")
-            .arg("/C")
-            .arg("start")
-            .arg("")
-            .arg(&bat_path)
-            .spawn()?;
-
-        println!("Launching update script: {}", bat_path.display());
-        println!("The application will now exit so the file lock is released.");
-        Ok(true)
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let cmd = install_cmd();
-        println!("Running: {cmd}");
-        let status = Command::new("cargo")
-            .args(["install", "--force", "--git", GIT_URL])
-            .status()?;
-        if !status.success() {
-            anyhow::bail!("cargo install failed with status: {status}");
-        }
-        Ok(false)
-    }
+    launch_self_update(REPO_OWNER, REPO_NAME, BIN_NAMES)
+        .map_err(|err| anyhow::anyhow!("failed to launch self-update helper: {err}"))?;
+    println!("Running: {}", install_cmd());
+    println!("The application will now exit so the updater can replace the binary.");
+    Ok(true)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{install_cmd, update_bat_content};
+    use super::{install_cmd, owner_repo};
+
+    #[test]
+    fn test_owner_repo_matches_github_repo() {
+        assert_eq!(owner_repo(), "cat2151/cat-gh-repo-creator");
+    }
 
     #[test]
     fn test_install_cmd_uses_repo_git_url() {
         assert_eq!(
             install_cmd(),
             "cargo install --force --git https://github.com/cat2151/cat-gh-repo-creator"
-        );
-    }
-
-    #[test]
-    fn test_update_bat_content_runs_install_then_self_deletes() {
-        assert_eq!(
-            update_bat_content(),
-            "@echo off\r\ntimeout /t 3 /nobreak >nul\r\ncargo install --force --git https://github.com/cat2151/cat-gh-repo-creator\r\nset \"EXITCODE=%ERRORLEVEL%\"\r\ndel \"%~f0\"\r\nexit /b %EXITCODE%\r\n"
         );
     }
 }
