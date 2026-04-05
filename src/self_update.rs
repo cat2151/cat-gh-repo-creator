@@ -23,17 +23,24 @@ fn git_url() -> &'static str {
         .as_str()
 }
 
-pub fn run_self_update() -> anyhow::Result<bool> {
-    launch_self_update(REPO_OWNER, REPO_NAME, BIN_NAMES)
-        .map_err(|err| anyhow::anyhow!("failed to launch self-update helper: {err}"))?;
+fn run_self_update_with(
+    launch: impl FnOnce(&str, &str, &[&str]) -> Result<(), Box<dyn std::error::Error>>,
+) -> anyhow::Result<bool> {
+    launch(REPO_OWNER, REPO_NAME, BIN_NAMES)
+        .map_err(|err| anyhow::anyhow!("セルフアップデートの起動に失敗しました: {err}"))?;
     println!("Running: {}", install_cmd());
     println!("The application will now exit so the updater can replace the binary.");
     Ok(true)
 }
 
+pub fn run_self_update() -> anyhow::Result<bool> {
+    run_self_update_with(launch_self_update)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{install_cmd, owner_repo};
+    use super::{install_cmd, owner_repo, run_self_update_with, BIN_NAMES, REPO_NAME, REPO_OWNER};
+    use std::{cell::RefCell, io};
 
     #[test]
     fn test_owner_repo_matches_github_repo() {
@@ -46,5 +53,42 @@ mod tests {
             install_cmd(),
             "cargo install --force --git https://github.com/cat2151/cat-gh-repo-creator"
         );
+    }
+
+    #[test]
+    fn test_run_self_update_calls_library_with_expected_arguments() {
+        let actual = RefCell::new(None);
+
+        let should_exit = run_self_update_with(|owner, repo, bins| {
+            actual.replace(Some((
+                owner.to_string(),
+                repo.to_string(),
+                bins.iter()
+                    .map(|bin| (*bin).to_string())
+                    .collect::<Vec<_>>(),
+            )));
+            Ok(())
+        })
+        .expect("self update launch should succeed");
+
+        assert!(should_exit);
+        assert_eq!(
+            actual.into_inner(),
+            Some((
+                REPO_OWNER.to_string(),
+                REPO_NAME.to_string(),
+                BIN_NAMES.iter().map(|bin| (*bin).to_string()).collect(),
+            ))
+        );
+    }
+
+    #[test]
+    fn test_run_self_update_wraps_launch_errors() {
+        let err = run_self_update_with(|_, _, _| Err(Box::new(io::Error::other("boom"))))
+            .expect_err("self update launch should fail");
+
+        assert!(err
+            .to_string()
+            .contains("セルフアップデートの起動に失敗しました: boom"));
     }
 }
