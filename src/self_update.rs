@@ -23,9 +23,12 @@ fn git_url() -> &'static str {
         .as_str()
 }
 
-fn run_self_update_with(
-    launch: impl FnOnce(&str, &str, &[&str]) -> Result<(), Box<dyn std::error::Error>>,
-) -> anyhow::Result<bool> {
+fn run_self_update_with<E>(
+    launch: impl FnOnce(&str, &str, &[&str]) -> Result<(), E>,
+) -> anyhow::Result<bool>
+where
+    E: std::fmt::Display,
+{
     launch(REPO_OWNER, REPO_NAME, BIN_NAMES)
         .map_err(|err| anyhow::anyhow!("セルフアップデートの起動に失敗しました: {err}"))?;
     println!("Running: {}", install_cmd());
@@ -59,7 +62,7 @@ mod tests {
     fn test_run_self_update_calls_library_with_expected_arguments() {
         let actual = RefCell::new(None);
 
-        let should_exit = run_self_update_with(|owner, repo, bins| {
+        let should_exit = run_self_update_with(|owner, repo, bins| -> Result<(), io::Error> {
             actual.replace(Some((
                 owner.to_string(),
                 repo.to_string(),
@@ -84,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_run_self_update_wraps_launch_errors() {
-        let err = run_self_update_with(|_, _, _| Err(Box::new(io::Error::other("boom"))))
+        let err = run_self_update_with(|_, _, _| Err(io::Error::other("boom")))
             .expect_err("self update launch should fail");
 
         assert!(err
