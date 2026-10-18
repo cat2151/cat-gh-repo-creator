@@ -22,6 +22,5 @@ mod tests {
         let parsed: AppConfig = toml::from_str(&text).unwrap();
         assert_eq!(parsed.license, cfg.license);
         assert_eq!(parsed.copy_files.len(), cfg.copy_files.len());
-        assert_eq!(parsed.commit_message, cfg.commit_message);
     }
 }

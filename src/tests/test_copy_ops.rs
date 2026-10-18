@@ -84,4 +84,26 @@ mod tests {
         assert!(all.contains("README.md"));
         assert!(all.contains("src"));
     }
+
+    #[test]
+    fn test_tree_display_does_not_expand_target_and_git() {
+        let dir = tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("target").join("a").join("b")).unwrap();
+        fs::create_dir_all(dir.path().join("src").join("x").join(".git").join("y")).unwrap();
+        fs::write(dir.path().join("src").join("main.rs"), "").unwrap();
+
+        let mut lines = Vec::new();
+        tree_display(dir.path(), "", &mut lines);
+
+        let names: Vec<&str> = lines
+            .iter()
+            .map(|l| l.rsplit(' ').next().unwrap_or(""))
+            .collect();
+        assert!(names.contains(&"target/"), "{:?}", lines);
+        assert!(names.contains(&".git/"), "{:?}", lines);
+        assert!(names.contains(&"main.rs"), "{:?}", lines);
+        assert!(!names.contains(&"a/"), "{:?}", lines);
+        assert!(!names.contains(&"b/"), "{:?}", lines);
+        assert!(!names.contains(&"y/"), "{:?}", lines);
+    }
 }

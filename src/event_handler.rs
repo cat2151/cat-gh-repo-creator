@@ -1,13 +1,22 @@
+mod action_worker;
 mod git_worker;
 
+#[cfg(test)]
+pub(crate) use action_worker::spawn_action_worker;
+pub(crate) use action_worker::{poll_pending_action, start_pending_action, ActionWorker};
 pub(crate) use git_worker::{poll_git_ops, start_git_ops, GitOpsWorker};
 
-use crate::app_state::{AbortDialogKind, AppScreen, AppState, PendingAction};
+use crate::app_state::{
+    AbortDialogKind, AppScreen, AppState, PendingAction, COMMIT_VIA_CHOICES,
+    COMMIT_VIA_FREE_INPUT_INDEX,
+};
 use crate::copy_ops::{copy_file, rewrite_config_yml_repo_name, tree_display};
-use crate::git_ops::GitOps;
+use crate::git_ops::{preview_git_add, AddPreview, GitOps};
 use crate::logger::Logger;
 use crate::scanner::{find_copy_candidates, list_repo_contents, CopyCandidate};
 use anyhow::Result;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui_textarea::TextArea;
 use std::fs;
 use std::path::Path;
 
@@ -24,6 +33,7 @@ pub fn handle_enter(state: &mut AppState, logger: &Logger) -> Result<()> {
             state.analysis_complete = false;
             state.analysis_ok = false;
             state.analysis_reasons.clear();
+            state.inspect_tree_lines.clear();
             state.copy_candidates.clear();
             state.copy_results.clear();
             state.config_yml_lines.clear();
@@ -31,6 +41,7 @@ pub fn handle_enter(state: &mut AppState, logger: &Logger) -> Result<()> {
             state.config_yml_new_name.clear();
             state.fetch_results.clear();
             state.fetched_filenames.clear();
+            state.add_preview = None;
             state.repo_url = None;
             state.begin_processing(
                 format!("{} を分析中...", entry.name),
@@ -67,9 +78,11 @@ pub fn handle_enter(state: &mut AppState, logger: &Logger) -> Result<()> {
             state.screen = AppScreen::FetchFiles;
         }
 
-        // FetchResult → CreateDialog（自動遷移）
+        // FetchResult → CommitMessageSelect（自動遷移）
         AppScreen::FetchResult => {
-            state.screen = AppScreen::CreateDialog;
+            state.commit_message_cursor = 0;
+            state.commit_via_input = None;
+            state.screen = AppScreen::CommitMessageSelect;
         }
 
         AppScreen::Done | AppScreen::AbortDialog { .. } => {}
@@ -107,13 +120,19 @@ fn execute_selected_repo_inspection(state: &mut AppState, logger: &Logger) -> Re
     logger.log(&format!("Contents count: {}", contents.len()))?;
     state.repo_contents = contents;
 
+    let mut tree_lines = vec![format!("{}/", entry.name)];
+    tree_display(&entry.path, "", &mut tree_lines);
+    logger.log(&format!("Tree lines: {}", tree_lines.len()))?;
+    state.inspect_tree_lines = tree_lines;
+
     let mut reasons = Vec::new();
-    let ok_no_git = !entry.has_git;
     let ok_cargo = entry.has_cargo_toml;
-    if ok_no_git {
+    if !entry.has_git {
         reasons.push("✓ .git/ が存在しない".to_string());
+    } else if entry.is_target() {
+        reasons.push("✓ .git/ はあるが commit も remote も無い".to_string());
     } else {
-        reasons.push("✗ .git/ が存在する（既存repoの可能性）".to_string());
+        reasons.push("✗ .git/ に commit か remote がある（既存repoの可能性）".to_string());
     }
     if ok_cargo {
         reasons.push("✓ Cargo.toml が存在する".to_string());
@@ -122,7 +141,7 @@ fn execute_selected_repo_inspection(state: &mut AppState, logger: &Logger) -> Re
     }
 
     state.analysis_complete = true;
-    state.analysis_ok = ok_no_git && ok_cargo;
+    state.analysis_ok = entry.is_target();
     state.analysis_reasons = reasons;
     logger.log(if state.analysis_ok {
         "Analysis: OK"
@@ -279,6 +298,86 @@ pub fn handle_yes(state: &mut AppState, _logger: &Logger) -> Result<()> {
     Ok(())
 }
 
+pub fn commit_message_from_via(via: &str) -> String {
+    format!("Initial commit (generated via {})", via)
+}
+
+/// CommitMessageSelect のキー入力。一覧では j/k で選んで Enter。「自由入力」で Enter すると
+/// 1行の入力欄を開き、空でない入力の Enter で確定、Esc で一覧へ戻る。確定したら CreateDialog へ進む。
+pub fn handle_commit_message_key(
+    state: &mut AppState,
+    logger: &Logger,
+    key: KeyEvent,
+) -> Result<()> {
+    let is_enter = key.code == KeyCode::Enter
+        || (key.code == KeyCode::Char('m') && key.modifiers.contains(KeyModifiers::CONTROL));
+    if let Some(input) = state.commit_via_input.as_mut() {
+        if is_enter {
+            let via = input.lines().join("").trim().to_string();
+            if !via.is_empty() {
+                return confirm_commit_message(state, logger, &via);
+            }
+        } else if key.code == KeyCode::Esc {
+            state.commit_via_input = None;
+        } else {
+            input.input(key);
+        }
+        return Ok(());
+    }
+    match key.code {
+        KeyCode::Char('j') | KeyCode::Down => state.commit_message_cursor_down(),
+        KeyCode::Char('k') | KeyCode::Up => state.commit_message_cursor_up(),
+        _ if is_enter => {
+            if state.commit_message_cursor == COMMIT_VIA_FREE_INPUT_INDEX {
+                state.commit_via_input = Some(TextArea::default());
+            } else {
+                let via = COMMIT_VIA_CHOICES[state.commit_message_cursor];
+                return confirm_commit_message(state, logger, via);
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn confirm_commit_message(state: &mut AppState, logger: &Logger, via: &str) -> Result<()> {
+    state.commit_message = commit_message_from_via(via);
+    state.commit_via_input = None;
+    logger.log(&format!("Commit message: {}", state.commit_message))?;
+    state.create_confirm_input = TextArea::default();
+    state.screen = AppScreen::CreateDialog;
+    Ok(())
+}
+
+/// CreateDialog で公開へ進むために入力欄へ打つ語。
+pub const CREATE_CONFIRM_WORD: &str = "commit";
+
+/// CreateDialog のキー入力。文字は入力欄へ入り、Enter で入力が
+/// [`CREATE_CONFIRM_WORD`] と完全一致なら実行へ、それ以外（空を含む）と Esc はキャンセル。
+pub fn handle_create_dialog_key(
+    state: &mut AppState,
+    logger: &Logger,
+    key: KeyEvent,
+) -> Result<()> {
+    let is_enter = key.code == KeyCode::Enter
+        || (key.code == KeyCode::Char('m') && key.modifiers.contains(KeyModifiers::CONTROL));
+    if is_enter {
+        let typed = state.create_confirm_input.lines().join("");
+        if typed == CREATE_CONFIRM_WORD {
+            logger.log("Create confirmed.")?;
+            return handle_yes(state, logger);
+        }
+        logger.log(&format!("Create cancelled (input: {:?}).", typed))?;
+        return handle_no(state, logger);
+    }
+    if key.code == KeyCode::Esc {
+        logger.log("Create cancelled (Esc).")?;
+        return handle_no(state, logger);
+    }
+    state.create_confirm_input.input(key);
+    Ok(())
+}
+
 pub fn handle_no(state: &mut AppState, _logger: &Logger) -> Result<()> {
     state.screen = AppScreen::AbortDialog {
         message: "キャンセルされました。".to_string(),
@@ -377,12 +476,20 @@ pub fn execute_fetch_files(state: &mut AppState, logger: &Logger) -> Result<()> 
         .ok_or_else(|| anyhow::anyhow!("No dir selected"))?;
     let ops = GitOps::new(&dir);
 
+    let mut fetched = Vec::new();
     macro_rules! step {
-        ($msg:expr, $op:expr) => {{
+        ($name:expr, $msg:expr, $op:expr) => {{
             logger.log(&format!("→ {}", $msg))?;
             match $op {
-                Ok(_) => {
+                Ok(true) => {
                     logger.log(&format!("  ✓ {} done", $msg))?;
+                    fetched.push($name.to_string());
+                }
+                Ok(false) => {
+                    logger.log(&format!(
+                        "  - skipped: {} already exists (not overwritten)",
+                        $name
+                    ))?;
                 }
                 Err(e) => {
                     let msg = format!("  ✗ {} Error: {}", $msg, e);
@@ -397,14 +504,37 @@ pub fn execute_fetch_files(state: &mut AppState, logger: &Logger) -> Result<()> 
         }};
     }
 
-    step!("curl .gitignore (gitignore.io/rust)", ops.fetch_gitignore());
-    step!("curl LICENSE (MIT)", ops.fetch_license_mit());
+    step!(
+        ".gitignore",
+        "curl .gitignore (gitignore.io/rust)",
+        ops.fetch_gitignore()
+    );
+    step!("LICENSE", "curl LICENSE (MIT)", ops.fetch_license_mit());
 
     let mut tree = Vec::new();
     tree_display(&dir, "", &mut tree);
     state.fetch_results = tree;
-    state.fetched_filenames = vec![".gitignore".to_string(), "LICENSE".to_string()];
+    state.fetched_filenames = fetched;
     logger.log("Fetch complete.")?;
+    state.add_preview = Some(log_add_preview(&dir, logger)?);
     state.screen = AppScreen::FetchResult;
     Ok(())
+}
+
+/// `git add .` で入るファイルを一覧して log に出す。一覧の失敗は Err の文字列として返し、先へは進める。
+fn log_add_preview(dir: &Path, logger: &Logger) -> Result<std::result::Result<AddPreview, String>> {
+    match preview_git_add(dir) {
+        Ok(preview) => {
+            logger.log(&format!("git add . files: {}", preview.total))?;
+            logger.log(&format!("Suspicious files: {}", preview.suspicious.len()))?;
+            for p in &preview.suspicious {
+                logger.log(&format!("  ⚠ {}", p))?;
+            }
+            Ok(Ok(preview))
+        }
+        Err(e) => {
+            logger.log(&format!("git add . files: listing failed ({})", e))?;
+            Ok(Err(e.to_string()))
+        }
+    }
 }

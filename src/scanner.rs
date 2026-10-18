@@ -1,6 +1,7 @@
 use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
@@ -10,13 +11,43 @@ pub struct DirEntry {
     pub created: SystemTime,
     pub has_git: bool,
     pub has_cargo_toml: bool,
+    /// `.git/` に commit がある。`.git/` か Cargo.toml が無い dir は調べず false。
+    pub has_commit: bool,
+    /// `.git/` に remote がある。`.git/` か Cargo.toml が無い dir は調べず false。
+    pub has_remote: bool,
 }
 
 impl DirEntry {
-    /// フィルタ通過 = .git/なし かつ Cargo.tomlあり
+    /// フィルタ通過 = Cargo.tomlあり かつ（.git/なし、または commit も remote も無い）
     pub fn is_target(&self) -> bool {
-        !self.has_git && self.has_cargo_toml
+        self.has_cargo_toml && (!self.has_git || (!self.has_commit && !self.has_remote))
     }
+}
+
+/// `.git/` の commit と remote の有無を git で調べる。
+/// git が起動できない・`.git/` が壊れているなど判定できないときは、
+/// 対象から外れる側（commit も remote もある）として扱う。
+fn inspect_git_state(path: &Path) -> (bool, bool) {
+    let git_dir = path.join(".git");
+    let has_commit = match Command::new("git")
+        .arg("--git-dir")
+        .arg(&git_dir)
+        .args(["rev-parse", "--verify", "-q", "HEAD"])
+        .output()
+    {
+        Ok(out) => out.status.code() != Some(1),
+        Err(_) => true,
+    };
+    let has_remote = match Command::new("git")
+        .arg("--git-dir")
+        .arg(&git_dir)
+        .arg("remote")
+        .output()
+    {
+        Ok(out) => !out.status.success() || !out.stdout.iter().all(u8::is_ascii_whitespace),
+        Err(_) => true,
+    };
+    (has_commit, has_remote)
 }
 
 pub fn scan_directories(base: &Path) -> Result<Vec<DirEntry>> {
@@ -46,6 +77,11 @@ pub fn scan_directories(base: &Path) -> Result<Vec<DirEntry>> {
 
         let has_git = path.join(".git").is_dir();
         let has_cargo_toml = path.join("Cargo.toml").is_file();
+        let (has_commit, has_remote) = if has_git && has_cargo_toml {
+            inspect_git_state(&path)
+        } else {
+            (false, false)
+        };
 
         entries.push(DirEntry {
             path,
@@ -53,11 +89,13 @@ pub fn scan_directories(base: &Path) -> Result<Vec<DirEntry>> {
             created,
             has_git,
             has_cargo_toml,
+            has_commit,
+            has_remote,
         });
     }
 
     // 作成日付降順
-    entries.sort_by(|a, b| b.created.cmp(&a.created));
+    entries.sort_by_key(|a| std::cmp::Reverse(a.created));
     Ok(entries)
 }
 

@@ -9,8 +9,9 @@ name = "cat-gh-repo-creator"
 path = "src/main.rs"
 
 [dependencies]
-ratatui = "0.29"
-crossterm = "0.28"
+ratatui = "0.30"
+crossterm = "0.29"
+ratatui-textarea = { version = "0.9", features = ["crossterm"] }
 toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 dirs = "5.0"

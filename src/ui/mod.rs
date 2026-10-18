@@ -8,9 +8,9 @@ mod time;
 use crate::app_state::{AppScreen, AppState};
 use blocks::dim_block;
 use columns::{
-    render_col_config_preview, render_col_config_rewrite, render_col_copy_dialog,
-    render_col_copy_result, render_col_create_dialog, render_col_dir_list, render_col_executing,
-    render_col_fetch_files, render_col_fetch_result, render_col_repo_inspect,
+    render_col_commit_message, render_col_config_preview, render_col_config_rewrite,
+    render_col_copy_dialog, render_col_copy_result, render_col_create_dialog, render_col_dir_list,
+    render_col_executing, render_col_fetch_files, render_col_fetch_result, render_col_repo_inspect,
 };
 use layout::{active_col, col_ratios, ratios_to_constraints};
 use overlay::{render_abort, render_done, render_log, render_processing};
@@ -124,14 +124,22 @@ pub fn render(frame: &mut Frame, state: &AppState, log_lines: &[String]) {
         cols[8],
         active >= 8,
         active == 8,
-        |f, a, act| render_col_create_dialog(f, a, state, act),
-        " Create? ",
+        |f, a, act| render_col_commit_message(f, a, state, act),
+        " Message ",
     );
     render_or_dim(
         frame,
         cols[9],
         active >= 9,
         active == 9,
+        |f, a, act| render_col_create_dialog(f, a, state, act),
+        " Create? ",
+    );
+    render_or_dim(
+        frame,
+        cols[10],
+        active >= 10,
+        active == 10,
         |f, a, act| render_col_executing(f, a, state, act),
         " Execute ",
     );

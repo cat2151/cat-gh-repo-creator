@@ -1,6 +1,8 @@
 use anyhow::{bail, Result};
 use std::path::Path;
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::SystemTime;
 
 pub struct GitOps {
     pub repo_path: std::path::PathBuf,
@@ -53,11 +55,11 @@ impl GitOps {
         self.run("git", &["branch", "-M", "main"])
     }
 
-    /// curl で .gitignore を取得してローカルに書く
-    pub fn fetch_gitignore(&self) -> Result<()> {
+    /// curl で .gitignore を取得してローカルに書く。既にあれば取得せず `false` を返す
+    pub fn fetch_gitignore(&self) -> Result<bool> {
         let dest = self.repo_path.join(".gitignore");
         if dest.exists() {
-            return Ok(());
+            return Ok(false);
         }
         let output = Command::new("curl")
             .args([
@@ -72,14 +74,14 @@ impl GitOps {
             let err = String::from_utf8_lossy(&output.stderr).to_string();
             bail!("curl gitignore failed: {}", err);
         }
-        Ok(())
+        Ok(true)
     }
 
-    /// curl で LICENSE (MIT) を取得してローカルに書く
-    pub fn fetch_license_mit(&self) -> Result<()> {
+    /// curl で LICENSE (MIT) を取得してローカルに書く。既にあれば取得せず `false` を返す
+    pub fn fetch_license_mit(&self) -> Result<bool> {
         let dest = self.repo_path.join("LICENSE");
         if dest.exists() {
-            return Ok(());
+            return Ok(false);
         }
         let output = Command::new("curl")
             .args([
@@ -94,7 +96,7 @@ impl GitOps {
             let err = String::from_utf8_lossy(&output.stderr).to_string();
             bail!("curl LICENSE failed: {}", err);
         }
-        Ok(())
+        Ok(true)
     }
 
     /// gh repo create --source=. --push --disable-wiki
@@ -111,6 +113,91 @@ impl GitOps {
     pub fn open_browser(url: &str) -> Result<()> {
         Command::new("cmd").args(["/C", "start", "", url]).spawn()?;
         Ok(())
+    }
+}
+
+/// `git add .` で入るファイルの件数と、そのうち怪しいもののパス
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct AddPreview {
+    pub total: usize,
+    pub suspicious: Vec<String>,
+}
+
+/// `dir` で `git add .` したときに入るファイルを、`dir` に何も作らずに一覧する。
+/// 一時 dir に bare repo を作り、それを git-dir として `dir` を work-tree に指定する。
+/// `.gitignore` は効くが、`dir` に既存の `.git/` があってもその中の設定や除外は使わない。
+pub fn preview_git_add(dir: &Path) -> Result<AddPreview> {
+    let bare = TempGitDir::create()?;
+    let output = Command::new("git")
+        .arg("--git-dir")
+        .arg(&bare.0)
+        .arg("--work-tree")
+        .arg(dir)
+        .args(["ls-files", "-z", "--others", "--exclude-standard"])
+        .output()?;
+    if !output.status.success() {
+        bail!(
+            "git ls-files failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    let files: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .split('\0')
+        .filter(|p| !p.is_empty())
+        .map(ToString::to_string)
+        .collect();
+    Ok(AddPreview {
+        total: files.len(),
+        suspicious: files.into_iter().filter(|p| is_suspicious(p)).collect(),
+    })
+}
+
+/// commit すべきでない可能性が高いファイル（キャッシュ・依存物・秘密情報）か
+pub fn is_suspicious(path: &str) -> bool {
+    let parts: Vec<&str> = path.split('/').collect();
+    let file_name = parts.last().copied().unwrap_or_default();
+    parts
+        .iter()
+        .any(|p| *p == "__pycache__" || *p == "node_modules")
+        || file_name.ends_with(".pyc")
+        || file_name.ends_with(".pyo")
+        || file_name == ".env"
+}
+
+/// `std::env::temp_dir()` の下の一意な bare repo。drop で消す。
+struct TempGitDir(std::path::PathBuf);
+
+impl TempGitDir {
+    fn create() -> Result<Self> {
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let nanos = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default();
+        let path = std::env::temp_dir().join(format!(
+            "cat-gh-repo-creator-{}-{}-{}",
+            std::process::id(),
+            nanos,
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        let dir = Self(path);
+        let output = Command::new("git")
+            .args(["init", "-q", "--bare"])
+            .arg(&dir.0)
+            .output()?;
+        if !output.status.success() {
+            bail!(
+                "git init --bare failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(dir)
+    }
+}
+
+impl Drop for TempGitDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

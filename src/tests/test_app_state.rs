@@ -13,6 +13,9 @@ mod tests {
             created: SystemTime::UNIX_EPOCH,
             has_git,
             has_cargo_toml: has_cargo,
+            // has_git の entry は commit のある既存 repo として扱う
+            has_commit: has_git,
+            has_remote: false,
         }
     }
 

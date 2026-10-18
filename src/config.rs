@@ -9,7 +9,6 @@ pub const APP_NAME: &str = "cat-gh-repo-creator";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub scan_directory: String,
-    pub commit_message: String,
     pub gitignore_template: String,
     pub license: String,
     pub copy_files: Vec<String>,
@@ -19,8 +18,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            scan_directory: String::from("C:\\Users\\username\\repos"),
-            commit_message: String::from("Initial commit (generated via Claude chat UI)"),
+            scan_directory: String::from("C:\\Users\\user\\repos"),
             gitignore_template: String::from("Rust"),
             license: String::from("mit"),
             copy_files: vec![

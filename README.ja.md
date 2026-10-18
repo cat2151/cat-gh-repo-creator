@@ -132,7 +132,7 @@ TUI上では target を白、非targetをグレーで表示します。カーソ
 ```sh
 git init
 git add .
-git commit -m "Initial commit (generated via Claude chat UI)"
+git commit -m "Initial commit (generated via <選んだもの>)"  # Message 欄で Claude chat UI / AI / 自由入力 から選ぶ
 git branch -M main
 gh repo create <リポジトリ名> --public --source=. --remote=origin --push --disable-wiki
 ```

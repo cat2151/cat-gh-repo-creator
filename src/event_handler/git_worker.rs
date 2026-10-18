@@ -31,7 +31,7 @@ pub(crate) fn start_git_ops(state: &AppState, logger: &Logger) -> Result<GitOpsW
         .as_ref()
         .map(|d| d.name.clone())
         .unwrap_or_default();
-    let commit_message = state.config.commit_message.clone();
+    let commit_message = state.commit_message.clone();
     let logger = logger.clone();
     let (sender, receiver) = mpsc::channel();
     let worker_logger = logger.clone();

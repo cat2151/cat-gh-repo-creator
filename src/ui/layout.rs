@@ -1,12 +1,12 @@
 use crate::app_state::AppScreen;
 use ratatui::layout::Constraint;
 
-const TOTAL_COLS: usize = 10;
+const TOTAL_COLS: usize = 11;
 
 /// col index
 /// 0: Repos  1: Inspect  2: CopyDialog  3: CopyResult
 /// 4: ConfigRewrite  5: ConfigPreview
-/// 6: FetchFiles  7: FetchResult  8: CreateDialog  9: Execute
+/// 6: FetchFiles  7: FetchResult  8: CommitMessageSelect  9: CreateDialog  10: Execute
 pub(super) fn active_col(screen: &AppScreen) -> usize {
     match screen {
         AppScreen::DirList => 0,
@@ -17,9 +17,10 @@ pub(super) fn active_col(screen: &AppScreen) -> usize {
         AppScreen::ConfigPreview => 5,
         AppScreen::FetchFiles => 6,
         AppScreen::FetchResult => 7,
-        AppScreen::CreateDialog => 8,
-        AppScreen::Executing => 9,
-        AppScreen::Done => 9,
+        AppScreen::CommitMessageSelect => 8,
+        AppScreen::CreateDialog => 9,
+        AppScreen::Executing => 10,
+        AppScreen::Done => 10,
         AppScreen::AbortDialog { .. } => 99,
     }
 }
@@ -63,15 +64,15 @@ mod tests {
 
     #[test]
     fn active_column_ratios_emphasize_recent_columns() {
-        assert_eq!(col_ratios(0), [18, 4, 4, 4, 4, 4, 4, 4, 4, 4]);
-        assert_eq!(col_ratios(2), [6, 10, 18, 4, 4, 4, 4, 4, 4, 4]);
-        assert_eq!(col_ratios(9), [4, 4, 4, 4, 4, 4, 4, 6, 10, 18]);
+        assert_eq!(col_ratios(0), [18, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]);
+        assert_eq!(col_ratios(2), [6, 10, 18, 4, 4, 4, 4, 4, 4, 4, 4]);
+        assert_eq!(col_ratios(10), [4, 4, 4, 4, 4, 4, 4, 4, 6, 10, 18]);
     }
 
     #[test]
     fn last_constraint_keeps_minimum_width() {
         let constraints = ratios_to_constraints(&col_ratios(5));
-        assert_eq!(constraints.len(), 10);
-        assert!(matches!(constraints[9], Constraint::Min(3)));
+        assert_eq!(constraints.len(), 11);
+        assert!(matches!(constraints[10], Constraint::Min(3)));
     }
 }

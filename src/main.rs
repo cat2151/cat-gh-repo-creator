@@ -27,6 +27,9 @@ use std::io;
 use std::time::{Duration, Instant};
 
 const UI_POLL_INTERVAL: Duration = Duration::from_millis(250);
+// Windows では timeout 0 の poll が、イベントにならない入力レコードを1件読んだだけで false を返し、
+// 後ろに残ったキー入力を捨てきれない。0 より大きくして残りも読み切る。
+const QUEUED_KEY_DRAIN_TIMEOUT: Duration = Duration::from_millis(10);
 
 #[derive(Debug, Parser, PartialEq, Eq)]
 #[command(version, about, long_about = None)]
@@ -105,8 +108,11 @@ fn run_app(
         &state.config.scan_directory,
         logger,
     ));
+    let mut action_worker: Option<event_handler::ActionWorker> = None;
     let mut exec_worker: Option<event_handler::GitOpsWorker> = None;
     let mut next_exec_tick = Instant::now() + UI_POLL_INTERVAL;
+    // 処理中に押されたキーは、その後に表示された画面（確認ダイアログ等）への入力として扱わない。
+    let mut discard_queued_keys = false;
 
     loop {
         if let Some(worker) = startup_worker.as_mut() {
@@ -119,9 +125,14 @@ fn run_app(
 
         terminal.draw(|frame| ui::render(frame, state, &log_lines))?;
 
-        if let Some(action) = state.take_pending_action() {
-            event_handler::run_pending_action(state, logger, action)?;
-            continue;
+        if let Some(worker) = action_worker.as_mut() {
+            if event_handler::poll_pending_action(state, worker) {
+                action_worker = None;
+                discard_queued_keys = true;
+                continue;
+            }
+        } else if let Some(action) = state.take_pending_action() {
+            action_worker = Some(event_handler::start_pending_action(state, logger, action));
         }
 
         // CopyResult / ConfigPreview / FetchResult は描画後に自動遷移
@@ -130,7 +141,15 @@ fn run_app(
             AppScreen::CopyResult | AppScreen::ConfigPreview | AppScreen::FetchResult
         ) {
             event_handler::handle_enter(state, logger)?;
+            discard_queued_keys = true;
             continue;
+        }
+
+        if discard_queued_keys {
+            discard_queued_keys = false;
+            while event::poll(QUEUED_KEY_DRAIN_TIMEOUT)? {
+                event::read()?;
+            }
         }
 
         // Executing状態のときgit実行をバックグラウンドで進めつつUI更新
@@ -180,8 +199,8 @@ fn run_app(
             continue;
         }
 
-        // q → 常時終了（Done/AbortDialogはENTERで抜ける設計だが qも受け付ける）
-        if matches!(key.code, KeyCode::Char('q')) {
+        // q → 常時終了（Done/AbortDialogはENTERで抜ける設計だが qも受け付ける）。自由入力の欄では文字として扱う
+        if matches!(key.code, KeyCode::Char('q')) && state.commit_via_input.is_none() {
             logger.log("Quit by user.")?;
             break;
         }
@@ -226,15 +245,13 @@ fn run_app(
             // CopyResult: キー入力無視（ループ側で自動遷移）
             AppScreen::CopyResult => {}
 
-            AppScreen::CreateDialog => match key.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') => {
-                    event_handler::handle_yes(state, logger)?;
-                }
-                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Enter => {
-                    event_handler::handle_no(state, logger)?;
-                }
-                _ => {}
-            },
+            AppScreen::CommitMessageSelect => {
+                event_handler::handle_commit_message_key(state, logger, key)?;
+            }
+
+            AppScreen::CreateDialog => {
+                event_handler::handle_create_dialog_key(state, logger, key)?;
+            }
 
             AppScreen::Done | AppScreen::AbortDialog { .. } => {
                 if key.code == KeyCode::Enter {

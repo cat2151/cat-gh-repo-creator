@@ -25,6 +25,9 @@ pub fn rewrite_config_yml_repo_name(
     (rewritten, changed)
 }
 
+/// 名前だけ表示して中身を展開しないディレクトリ名（階層の深さに関係なく適用する）
+const UNEXPANDED_DIR_NAMES: [&str; 2] = ["target", ".git"];
+
 /// ディレクトリツリー表示（シンプルなASCIIツリー）
 pub fn tree_display(dir: &Path, prefix: &str, lines: &mut Vec<String>) {
     let Ok(entries) = fs::read_dir(dir) else {
@@ -42,7 +45,7 @@ pub fn tree_display(dir: &Path, prefix: &str, lines: &mut Vec<String>) {
         let suffix = if is_dir { "/" } else { "" };
         lines.push(format!("{}{}{}{}", prefix, connector, name, suffix));
 
-        if is_dir && entry.path() != dir {
+        if is_dir && entry.path() != dir && !UNEXPANDED_DIR_NAMES.contains(&name.as_str()) {
             let new_prefix = format!("{}{}   ", prefix, if is_last { " " } else { "│" });
             tree_display(&entry.path(), &new_prefix, lines);
         }
