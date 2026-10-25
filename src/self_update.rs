@@ -3,7 +3,21 @@ use std::sync::OnceLock;
 
 pub(crate) const REPO_OWNER: &str = "cat2151";
 pub(crate) const REPO_NAME: &str = "cat-gh-repo-creator";
-const BIN_NAMES: &[&str] = &["cat-gh-repo-creator"];
+const INSTALL_CRATES: &[&str] = &[];
+const MAIN_BRANCH: &str = "main";
+const BUILD_COMMIT_HASH: &str = env!("BUILD_COMMIT_HASH");
+
+pub fn run_check() -> anyhow::Result<()> {
+    let result = cat_self_update_lib::check_remote_commit(
+        REPO_OWNER,
+        REPO_NAME,
+        MAIN_BRANCH,
+        BUILD_COMMIT_HASH,
+    )
+    .map_err(|err| anyhow::anyhow!("更新の確認に失敗しました: {err}"))?;
+    println!("{result}");
+    Ok(())
+}
 
 pub(crate) fn install_cmd() -> String {
     format!("cargo install --force --git {}", git_url())
@@ -29,10 +43,11 @@ fn run_self_update_with<E>(
 where
     E: std::fmt::Display,
 {
-    launch(REPO_OWNER, REPO_NAME, BIN_NAMES)
+    launch(REPO_OWNER, REPO_NAME, INSTALL_CRATES)
         .map_err(|err| anyhow::anyhow!("セルフアップデートの起動に失敗しました: {err}"))?;
     println!("Running: {}", install_cmd());
     println!("The application will now exit so the updater can replace the binary.");
+    println!("Restart cat-gh-repo-creator after the update finishes.");
     Ok(true)
 }
 
@@ -42,7 +57,7 @@ pub fn run_self_update() -> anyhow::Result<bool> {
 
 #[cfg(test)]
 mod tests {
-    use super::{install_cmd, owner_repo, run_self_update_with, BIN_NAMES, REPO_NAME, REPO_OWNER};
+    use super::{install_cmd, owner_repo, run_self_update_with, REPO_NAME, REPO_OWNER};
     use std::{cell::RefCell, io};
 
     #[test]
@@ -77,11 +92,7 @@ mod tests {
         assert!(should_exit);
         assert_eq!(
             actual.into_inner(),
-            Some((
-                REPO_OWNER.to_string(),
-                REPO_NAME.to_string(),
-                BIN_NAMES.iter().map(|bin| (*bin).to_string()).collect(),
-            ))
+            Some((REPO_OWNER.to_string(), REPO_NAME.to_string(), Vec::new(),))
         );
     }
 

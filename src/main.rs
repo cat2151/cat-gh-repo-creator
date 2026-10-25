@@ -40,6 +40,8 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Subcommand, PartialEq, Eq)]
 pub(crate) enum Commands {
+    /// Compare the build-time commit with the remote main branch.
+    Check,
     /// Run self-update to fetch the latest version.
     Update {
         #[arg(hide = true, trailing_var_arg = true, allow_hyphen_values = true)]
@@ -62,6 +64,10 @@ where
 
 fn main() -> Result<()> {
     let cli = parse_cli();
+    if matches!(cli.command, Some(Commands::Check)) {
+        self_update::run_check()?;
+        return Ok(());
+    }
     if matches!(cli.command, Some(Commands::Update { .. })) {
         self_update::run_self_update()?;
         return Ok(());
