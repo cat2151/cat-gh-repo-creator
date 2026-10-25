@@ -1,20 +1,20 @@
 # cat-gh-repo-creator
 
-A Windows application written in Rust that detects local un-git-managed Rust projects and interactively guides you through the process of publishing them to GitHub using a TUI.
+A Windows application written in Rust that detects local, un-git-managed Rust projects and interactively guides you through the process of publishing them to GitHub using a TUI.
 
 ---
 
 ## Challenges and Solutions
-- The Problem So Far
-    - I want to easily publish Rust projects generated locally by a Coding agent to GitHub.
-    - While it can be done manually, I want to make it easier with a tool.
+- Previous Challenges
+    - I want to easily publish Rust projects generated locally by a coding agent to GitHub.
+    - It can be done manually, but I'd prefer an easier way with a tool.
 - This Tool's Solution
-    - Solved with easy operations on a TUI!
+    - Solves the problem with easy TUI operations!
 
-## Requirements
+## System Requirements
 
 - Windows & Rust
-- git & [gh command](https://cli.github.com/) (ensure `gh auth login` has been completed beforehand)
+- git & [gh CLI](https://cli.github.com/) (Must be `gh auth login`'d beforehand)
 
 ---
 
@@ -26,13 +26,13 @@ Rust is required.
 cargo install --force --git https://github.com/cat2151/cat-gh-repo-creator
 ```
 
-## Initial Execution
+## First Run
 
 ```
 cat-gh-repo-creator
 ```
 
-A `config.toml` file will be automatically generated, and the application will exit. Please configure the following settings:
+`config.toml` will be automatically generated, and the application will exit. Please configure the settings below.
 
 ---
 
@@ -44,13 +44,13 @@ Upon first launch, `config.toml` will be automatically generated at the followin
 %LOCALAPPDATA%\cat-gh-repo-creator\config.toml
 ```
 
-**Please edit `scan_directory` in `config.toml` to match your environment (an error will occur if not edited)**
+**Edit `scan_directory` in `config.toml` to match your environment (an error will occur if not edited).**
 
 ```toml
 scan_directory = "C:\\Users\\<YOUR NAME>\\repos"
 ```
 
-## Run
+## Execution
 
 ```
 cat-gh-repo-creator
@@ -62,89 +62,105 @@ cat-gh-repo-creator
 cat-gh-repo-creator --help
 ```
 
+## Checking for Updates
+
+```sh
+cat-gh-repo-creator check
+```
+
+This compares the commit hash at build time with the latest commit on the `main` branch of GitHub. It displays the build-time hash as `embedded`, the latest remote hash as `remote`, and the `result` as `up-to-date` (matches) or `update available` (differences found).
+
+## Update
+
+```sh
+cat-gh-repo-creator update
+```
+
+This command executes `cargo install --force --git https://github.com/cat2151/cat-gh-repo-creator` in a separate process and then terminates the main application. After the update is complete, please manually restart `cat-gh-repo-creator`. Updating requires Rust, Git, and Python in your PATH. If the update command itself does not work, please re-run the installation command.
+
 ---
 
 ## Workflow
 
 ```
-[DirList]      Scan result list. Move with j/k, select with ENTER
+[DirList]      Scan results list. Move with j/k, select with ENTER.
     ↓ ENTER
-[RepoInspect]  Analysis result (OK/NG) and internal repository tree display
-    ↓ ENTER (only when OK)
-[CopyDialog]   Confirm copy candidate files found from nearby repositories  y / [N]
+[RepoInspect]  Analysis results (OK/NG) and internal repository tree display.
+    ↓ ENTER (only if OK)
+[CopyDialog]   Confirm copy candidate files found from nearby repositories. y / [N]
     ↓ y
-[CopyResult]   Tree display after copying
+[CopyResult]   Tree display after copying.
     ↓ ENTER
-[FetchFiles]   Curl .gitignore / LICENSE
-    ↓ Completed
-[FetchResult]  Display fetch results
+[FetchFiles]   cURL .gitignore / LICENSE.
+    ↓ Complete
+[FetchResult]  Display fetch results.
     ↓ Automatic
-[CreateDialog] Confirm settings for git init to gh repo create  y / [N]
+[CreateDialog] Confirm git init to gh repo create settings. y / [N]
     ↓ y
-[Executing]    Sequentially executes git init / add / commit / branch -M main / gh repo create, displaying a spinner every 250ms from the start, along with "Please wait, processing..."
-    ↓ Completed
-[Done]         Automatically opens the repository page in the browser → ENTER to exit
+[Executing]    Sequentially executes git init / add / commit / branch -M main / gh repo create, displaying a spinner and "Processing, please wait" every 250ms from the start.
+    ↓ Complete
+[Done]         Automatically opens the repository page in a browser → ENTER to exit.
 ```
 
-If analysis is NG, or if 'N' is selected in a dialog, the application transitions to an interruption dialog, and pressing ENTER will terminate the application.
+If the analysis is NG, or if you choose N in a dialog, you will transition to an interruption dialog, and pressing ENTER will exit the application.
 
 ---
 
 ## Key Operations
 
-| Key | Active Screen | Action |
-|-----|---------------|--------|
+| Key | Valid Screen | Action |
+|-----|--------------|--------|
 | `j` / `↓` | DirList | Cursor down (moves only to target dirs) |
 | `k` / `↑` | DirList | Cursor up (moves only to target dirs) |
 | `q` | All screens | Exit application |
-| `ENTER` | All screens | Confirm / Proceed to next step |
-| `y` | CopyDialog / CreateDialog | Yes (Execute) |
-| `n` / `N` / `ENTER` | CopyDialog / CreateDialog | No (To interruption dialog) |
+| `ENTER` | All screens | Confirm / Next step |
+| `y` | CopyDialog / CreateDialog | Yes (execute) |
+| `n` / `N` / `ENTER` | CopyDialog / CreateDialog | No (to interruption dialog) |
 
 ---
 
 ## Directory Filter
 
-Directories directly under `scan_directory` are listed in descending order by creation date, and those that **meet both of the following conditions** are considered targets:
+Directories directly under `scan_directory` are listed in descending order of creation date. Only those that meet **both of the following conditions** are considered targets:
 
-- No `.git/` directory exists
-- A `Cargo.toml` file exists
+- `.git/` does not exist
+- `Cargo.toml` exists
 
-On the TUI, targets are displayed in white, and non-targets in gray. The cursor moves only to target directories.
+In the TUI, targets are displayed in white, and non-targets in gray. The cursor moves only between target directories.
 
 ---
 
 ## File Copy
 
 - Repositories under `scan_directory` that contain `.git/` are scanned as "nearby repositories".
-- For each file configured in `copy_files` in the TOML, the **most recently modified version** is selected from all nearby repositories and copied. The destination is the root of the target directory selected with ENTER.
-- After copying, `_config.yml` automatically rewrites the following lines:
+- For each file configured in `copy_files` in `config.toml`, the **most recently modified file** from all nearby repositories is selected and copied. The destination is directly under the target directory chosen with ENTER.
+- For `_config.yml`, the following lines are automatically rewritten after copying:
 
-| Target for Rewrite    | Transformed Content       |
-|-----------------------|---------------------------|
-| `repository: owner/OLD_NAME` | `repository: owner/<NEW_REPO_NAME>` |
-| `baseurl: /OLD_NAME`     | `baseurl: /<NEW_REPO_NAME>`    |
+| Target for rewrite | Conversion content |
+|--------------------|--------------------|
+| `repository: owner/old_name` | `repository: owner/<new_repo_name>` |
+| `baseurl: /old_name` | `baseurl: /<new_repo_name>` |
 
 ---
 
-## Commands Executed by `gh repo create`
+## Commands executed by `gh repo create`
 
 ```sh
 git init
 git add .
-git commit -m "Initial commit (generated via <chosen_source>)"  # Select from Claude chat UI / AI / Free input in the Message field
+git commit -m "Initial commit (generated via <chosen option>)"  # Choose from Claude chat UI / AI / Free input in the Message field
 git branch -M main
 gh repo create <repository_name> --public --source=. --remote=origin --push --disable-wiki
 ```
 
-Upon completion, `https://github.com/<repository_name>` will automatically open in your browser.
+After completion, `https://github.com/<repository_name>` will automatically open in your browser.
 
 ## Assumptions
-- This application is intended for my personal use and is not designed for others. If you desire similar functionality, I recommend cloning the repository or building your own.
-- Frequent breaking changes will be made.
+- This application is intended for my personal use, not for others. If you want similar functionality, I recommend cloning or creating your own.
+- Destructive changes will be made frequently.
 
-## Project Goals
-- PoC. To demonstrate that a useful personal application can be created using free Claude chat (demonstrated).
+## What this app aims for
+- PoC: To demonstrate (and has demonstrated) that useful personal applications can be created with Claude's free chat.
 
-## What This Application Does Not Aim For (Out of Scope)
-- Support. Responding to requests or suggestions.
+## What it does not aim for (Out of scope)
+- Support: Responding to requests or suggestions.
